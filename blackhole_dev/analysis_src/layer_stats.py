@@ -32,6 +32,6 @@ def run(r, m, metric: str = "kurtosis", sample: int = 256):
            note=f"{'every row' if sample <= 0 else f'{sample} sampled rows per matrix'}")
     worst = max(table, key=lambda row: row[4]) if table else None
     if worst:
-        r.tiles([("Heaviest tails", f"layer {worst[0]} {worst[1]}", f"kurtosis {worst[4]}"),
+        r.tiles([("Heaviest tails", f"layer {worst[0]}", f"{worst[1]}, kurtosis {worst[4]}"),
                  ("Largest weight", max(row[3] for row in table), "absmax")])
     r.table("Per layer and part", ["layer", "part", "rms", "absmax", "kurtosis", "crest", "zero_frac"], table)

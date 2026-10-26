@@ -18,7 +18,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 1px s
 a { color: var(--flare); } a:hover { color: var(--ember); }
 ::-webkit-scrollbar { width: 10px; height: 10px; } ::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 5px; } ::-webkit-scrollbar-track { background: transparent; }
 
-#app { display: grid; grid-template-rows: 38px 1fr 26px; height: 100vh; }
+#app { display: grid; grid-template-rows: 38px 1fr 26px; grid-template-columns: minmax(0, 1fr); height: 100vh; }
 
 /* title bar */
 .titlebar { display: flex; align-items: center; gap: 18px; padding: 0 14px; background: var(--bg2); border-bottom: 1px solid var(--line2); -webkit-app-region: drag; }
