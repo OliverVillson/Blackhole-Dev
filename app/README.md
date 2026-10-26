@@ -83,6 +83,11 @@ and a starter recipe. Then:
   `blackhole_dev <version> · Python <version>` when the helper is up.
 - **Settings > Copilot key**: paste your Anthropic key. It is encrypted with the macOS Keychain and
   only ever read by the app's main process. No billing goes through the app.
+- **Copilot without an API key**: pick a model under *Claude · your Claude Code sign-in* in the Copilot
+  panel. It runs the Claude Code you installed and signed into yourself (`curl -fsSL https://claude.ai/install.sh | bash`,
+  then `claude` once in Terminal), so turns count against your own Claude plan. The app never sees that login.
+  Claude Code's built-in tools are switched off; it only gets the copilot's tools, and VM starts, runs and
+  downloads still need your click.
 - **Settings > Checks** lists Python, blackhole_dev, ssh and rsync.
 
 Other commands: `npm run doctor` (environment check), `npm run build` (production bundle), `npm start` (run that bundle),

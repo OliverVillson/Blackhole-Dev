@@ -1,7 +1,7 @@
 // I5 LLM provider API. Shared by the copilot (WS4) and local chat (WS6).
 // Runs in the Electron main process: the Anthropic key is only readable there.
 
-export type ProviderId = "anthropic" | "openai-compatible";
+export type ProviderId = "anthropic" | "openai-compatible" | "claude-code";
 
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -31,7 +31,7 @@ export interface ChatParams {
   max_tokens?: number;
   temperature?: number;
   top_p?: number;
-  /** Anthropic only. */
+  /** Anthropic and claude-code. */
   effort?: Effort;
   /** openai-compatible: the chat template opens <think> in the prompt, so the stream starts inside reasoning. */
   startsInThink?: boolean;
@@ -51,6 +51,11 @@ export interface ChatRequest {
   apiKey?: string;
   signal?: AbortSignal;
   params?: ChatParams;
+  /** claude-code: runs a tool call made inside the Claude Code run (its agent loop owns the
+   *  turn, so tool calls never come back as tool_use chunks). */
+  runTool?: (name: string, input: unknown) => Promise<{ content: string; isError?: boolean }>;
+  /** claude-code: working directory for the CLI (the workspace). */
+  cwd?: string;
 }
 
 export type FinishReason = "stop" | "length" | "tool_use" | "refusal" | "aborted";
