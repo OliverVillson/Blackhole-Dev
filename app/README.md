@@ -7,29 +7,65 @@ macOS (Apple silicon) first.
 ## Boot it on a Mac (dev mode)
 
 You need Node 22+, Python 3.11+, git, and the Xcode command line tools (`xcode-select --install`).
+Each block below is safe to paste as a whole.
+
+**1. Get the code.** Both repos, side by side (the harness gives you the `pipeline.*` steps and the
+presets):
 
 ```bash
-# 1. Get the code (the app lives in Blackhole-Dev/app; the public harness is optional but enables pipeline.* steps)
-mkdir -p ~/src && cd ~/src
+mkdir -p ~/src
+cd ~/src
 git clone https://github.com/OliverVillson/Blackhole-Dev.git
 git clone https://github.com/OliverVillson/BlackHole-Harness.git
+```
 
-# 2. Python env for the helper (python -m blackhole_dev.rpc)
+If you already have one of them, skip that line and `git pull` in it instead.
+
+**2. Python environment** for the helper the app talks to (`python -m blackhole_dev.rpc`):
+
+```bash
 python3 -m venv ~/bhdev-venv
 source ~/bhdev-venv/bin/activate
-pip install -e ~/src/BlackHole-Harness -e ~/src/BlackHole-Harness/harness -e ~/src/Blackhole-Dev
+pip install -e ~/src/BlackHole-Harness
+pip install -e ~/src/BlackHole-Harness/harness
+pip install -e ~/src/Blackhole-Dev
+```
 
-# 3. The app
+**3. The app:**
+
+```bash
 cd ~/src/Blackhole-Dev/app
 npm install
 npm run dev
 ```
 
+If `npm install` prints `install-scripts not yet covered by allowScripts` (npm 12 and newer blocks
+package install scripts until you allow them), Electron never unpacks itself and `npm run dev` dies
+with "Electron uninstall". Allow them and install again:
+
+```bash
+cd ~/src/Blackhole-Dev/app
+npm install-scripts approve electron node-pty fsevents
+npm install
+npm run dev
+```
+
+If your npm has no `install-scripts` command, finish Electron's install by hand instead:
+
+```bash
+cd ~/src/Blackhole-Dev/app
+node node_modules/electron/install.js
+npm run dev
+```
+
+`node-pty` is what gives the TERMINAL panel a real TTY; it builds from source on Apple silicon and
+takes a few seconds. If it fails, the app still runs and the terminal falls back to plain pipes.
+
 On first start the app creates `~/BlackHole-Dev/` with `recipes/`, `functions/` and `models/`
 and a starter recipe. Then:
 
-- **Settings (gear, bottom left) > Python helper**: paste `~/bhdev-venv/bin/python` (full path,
-  e.g. `/Users/you/bhdev-venv/bin/python`) and press *Save and restart*. The status bar shows
+- **Settings (gear, bottom left) > Python helper**: paste the full path of the venv's Python,
+  `/Users/<you>/bhdev-venv/bin/python`, and press *Save and restart*. The status bar shows
   `blackhole_dev <version> · Python <version>` when the helper is up.
 - **Settings > Copilot key**: paste your Anthropic key. It is encrypted with the macOS Keychain and
   only ever read by the app's main process. No billing goes through the app.
