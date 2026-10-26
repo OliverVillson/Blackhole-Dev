@@ -108,13 +108,20 @@ export function openPalette(shell: Shell, initial = ""): void {
     shell.helperStatus.state === "ready" ? helper("functions.list", {}).catch(() => []) : Promise.resolve([]),
   ]).then(([recipes, fns, builtins]) => {
     items = [
-      ...recipes.map((r: any) => ({ label: basename(r.path), detail: "recipe", run: () => shell.openFile(r.path) })),
-      ...fns.map((f: any) => ({ label: basename(f.path), detail: "my function", run: () => shell.openFile(f.path) })),
+      ...recipes.map((r: any) => ({ label: basename(r.path), detail: inFolder("recipe", shell.paths.recipes, r.path), run: () => shell.openFile(r.path) })),
+      ...fns.map((f: any) => ({ label: basename(f.path), detail: inFolder("my function", shell.paths.functions, f.path), run: () => shell.openFile(f.path) })),
       ...builtins.filter((b) => b.origin === "builtin").map((b) => ({ label: `ƒ ${b.name}`, detail: `built-in · ${b.per}`, run: () => shell.executeCommand("function.show", b.name) })),
     ];
     draw();
   });
   draw();
+}
+
+/** "recipe · qwen/" for a file in a subfolder, plain "recipe" at the top level. */
+function inFolder(kind: string, root: string, path: string): string {
+  const rel = path.slice(root.length + 1);
+  const i = rel.lastIndexOf("/");
+  return i < 0 ? kind : `${kind} · ${rel.slice(0, i)}/`;
 }
 
 /** Find in files: every line in recipes and functions that contains the query. */

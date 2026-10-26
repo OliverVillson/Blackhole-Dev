@@ -3,7 +3,7 @@
 
 import { mkdirSync, existsSync, writeFileSync } from "node:fs";
 import { readFile, writeFile, readdir, stat, rename, rm, mkdir } from "node:fs/promises";
-import { join, resolve, relative, isAbsolute, dirname, basename } from "node:path";
+import { join, resolve, relative, isAbsolute, dirname, basename, sep } from "node:path";
 import type { AppPaths } from "../shared/ext";
 import { STARTER } from "../shared/starter";
 
@@ -22,6 +22,8 @@ export function ensureWorkspace(p: AppPaths): void {
   for (const d of [p.workspace, p.recipes, p.functions, p.models]) mkdirSync(d, { recursive: true });
   if (fresh) writeFileSync(join(p.recipes, "first-recipe.py"), STARTER.recipe("first-recipe"));
 }
+
+const clean = (s: string) => s.replace(/[^A-Za-z0-9._-]/g, "-");
 
 export interface Entry {
   path: string;
@@ -53,9 +55,11 @@ export class Workspace {
     await rename(tmp, abs);
   }
 
+  /** Create a .py file in dir. The name may carry folders ("qwen/int4.py"); they are made too. */
   async create(dir: string, name: string, text: string): Promise<string> {
-    const clean = basename(name).replace(/[^A-Za-z0-9._-]/g, "-");
-    let abs = this.inside(join(dir, clean.endsWith(".py") ? clean : clean + ".py"));
+    const parts = name.split(/[\\/]+/).map(clean).filter((x) => x && x !== "." && x !== "..");
+    const file = parts.pop() ?? "untitled";
+    let abs = this.inside(join(dir, ...parts, file.endsWith(".py") ? file : file + ".py"));
     for (let i = 2; existsSync(abs); i++) abs = abs.replace(/(-\d+)?\.py$/, `-${i}.py`);
     await this.write(abs, text);
     return abs;
@@ -65,6 +69,30 @@ export class Workspace {
     const src = this.inside(from);
     const dst = this.inside(join(dirname(src), basename(toName)));
     if (existsSync(dst)) throw new Error(`${basename(dst)} already exists`);
+    await rename(src, dst);
+    return dst;
+  }
+
+  /** Make a folder under parent; "a/b" makes both. Returns its absolute path. */
+  async mkdir(parent: string, name: string): Promise<string> {
+    const parts = name.split(/[\\/]+/).map(clean).filter((x) => x && x !== "." && x !== "..");
+    if (!parts.length) throw new Error("folder name is empty");
+    const abs = this.inside(join(parent, ...parts));
+    if (existsSync(abs)) throw new Error(`${parts.join("/")} already exists`);
+    await mkdir(abs, { recursive: true });
+    return abs;
+  }
+
+  /** Move a file or folder into another folder (same name). Refuses to overwrite or to move a
+   *  folder into itself. Returns the new path. */
+  async move(from: string, toDir: string): Promise<string> {
+    const src = this.inside(from);
+    const dir = this.inside(toDir);
+    if (dir === src || dir.startsWith(src + sep)) throw new Error("cannot move a folder into itself");
+    const dst = join(dir, basename(src));
+    if (dst === src) return src;
+    if (existsSync(dst)) throw new Error(`${basename(src)} already exists there`);
+    await mkdir(dir, { recursive: true });
     await rename(src, dst);
     return dst;
   }

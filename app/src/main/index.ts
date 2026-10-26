@@ -156,6 +156,8 @@ async function main(): Promise<void> {
   reg("ws", "ws:write", (p: string, text: string) => ws.write(p, String(text)));
   reg("ws", "ws:create", (dir: string, name: string, text: string) => ws.create(dir, name, String(text ?? "")));
   reg("ws", "ws:rename", (p: string, name: string) => ws.rename(p, name));
+  reg("ws", "ws:mkdir", (parent: string, name: string) => ws.mkdir(parent, String(name)));
+  reg("ws", "ws:move", (p: string, toDir: string) => ws.move(p, toDir));
   reg("ws", "ws:trash", (p: string) => ws.remove(p, (abs) => shell.trashItem(abs)));
   reg("ws", "ws:importToml", async () => {
     const r = await dialog.showOpenDialog(win!, { title: "Import a TOML schema", filters: [{ name: "Schema", extensions: ["toml"] }], properties: ["openFile"] });

@@ -70,6 +70,16 @@ button.chip { cursor: pointer; }
 .btn { height: 30px; padding: 0 12px; border-radius: 4px; border: 1px solid var(--ash); background: var(--btn); color: var(--text); cursor: pointer; white-space: nowrap; }
 .btn:hover { border-color: var(--crimson); }
 .btn.sm { height: 24px; padding: 0 8px; }
+.btn.icon { width: 24px; padding: 0; display: inline-grid; place-items: center; flex: none; }
+.btn.icon svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.view-head > .hd { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.it.folder { color: var(--text); gap: 6px; }
+.it.folder .tw { width: 10px; color: var(--dim); font-size: 10px; flex: none; }
+.it.folder .fi svg { width: 14px; height: 14px; fill: none; stroke: var(--ember); stroke-width: 1.7; stroke-linejoin: round; display: block; }
+.it.folder .fname { overflow: hidden; text-overflow: ellipsis; }
+.tree .fgroup { display: flex; flex-direction: column; gap: 2px; border-radius: 6px; }
+.tree.drop, .tree .fgroup.drop { background: #1d0a03; box-shadow: inset 0 0 0 1px var(--ember); }
+[draggable="true"] { -webkit-user-drag: element; }
 .btn.pri { background: var(--ember); border-color: var(--ember); color: #000; }
 .btn.pri:hover { background: var(--flare); border-color: var(--flare); }
 .btn.danger { border-color: var(--redshift); color: var(--photon); }

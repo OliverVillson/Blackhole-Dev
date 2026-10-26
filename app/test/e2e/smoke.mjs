@@ -166,6 +166,20 @@ await win.waitForFunction(() => window.__shell);
 assert(await hidden(".sidebar"), "collapsed left side bar is remembered");
 assert(!(await hidden("aside.right")), "open right side bar is remembered");
 await win.click(icon("Recipes"));
+// Recipe folders: a subfolder shows as a group, drag a recipe onto it, collapse it.
+await win.evaluate(async () => {
+  const p = await window.bh.invoke("ws:paths");
+  await window.bh.invoke("ws:mkdir", p.recipes, "qwen");
+  await window.bh.invoke("ws:create", p.recipes, "mac/int4.py", "# recipe\n");
+  await window.bh.invoke("ws:create", p.recipes, "scratch.py", "# recipe\n");
+});
+await win.evaluate(() => window.__shell.executeCommand("recipes.refresh"));
+await win.waitForSelector(".it.folder:has-text('qwen')");
+await win.dragAndDrop(".rc:has-text('scratch.py')", ".it.folder:has-text('qwen')");
+await win.waitForFunction(() => [...document.querySelectorAll(".tree .fgroup")].some((g) => g.textContent.includes("qwen") && g.textContent.includes("scratch.py")));
+await win.screenshot({ path: join(out, "10-recipe-folders.png") });
+await win.click(".it.folder:has-text('mac')");
+assert(!(await win.isVisible(".rc:has-text('int4.py')")), "clicking a folder collapses it");
 await app.close();
 if (errors.length) {
   console.error("renderer errors:\n" + errors.join("\n"));

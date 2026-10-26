@@ -851,7 +851,16 @@ export class Shell {
   }
 
   fileRemoved(path: string): void {
-    for (const tab of this.allTabs().filter((x) => x.key === `file:${path}`)) this.closeTab(tab, true);
+    const gone = (p: string) => p === path || p.startsWith(path + "/");
+    for (const tab of this.allTabs().filter((x) => x.type === "file" && gone(x.state.path))) this.closeTab(tab, true);
+  }
+
+  /** A file or a whole folder moved: open tabs follow it. */
+  pathMoved(from: string, to: string): void {
+    for (const p of this.openFiles()) {
+      if (p === from) this.fileRenamed(p, to);
+      else if (p.startsWith(from + "/")) this.fileRenamed(p, to + p.slice(from.length));
+    }
   }
 
   private refreshTabButton(path: string): void {
