@@ -1,7 +1,8 @@
 // Copilot side panel (plain DOM, like the shell). Layout follows the "copilot streaming"
 // sketch: provider picker, control bar (Pause / Stop / Reject all / Accept all), the
 // conversation with tool rows and "you changed …" notes, and the steer box.
-import { ANTHROPIC_MODELS, EFFORTS, LOCAL_PRESETS, anthropicModel } from "../llm/catalog";
+import { ANTHROPIC_MODELS, CLAUDE_CODE_MODELS, EFFORTS, LOCAL_PRESETS, anthropicModel, claudeCodeModel } from "../llm/catalog";
+import type { ClaudeCodeStatus } from "../llm/claudeCode";
 import type { Effort } from "../llm/types";
 import type { KeyStatus, ProviderSettings } from "./main";
 import type { CopilotEvent, CopilotSession, CopilotState } from "./session";
@@ -64,6 +65,11 @@ const CSS = `
 .cp-conn{width:8px;height:8px;border-radius:50%;background:var(--line2)}
 .cp-conn.ok{background:var(--flare)}
 .cp-conn.bad{background:var(--redshift)}
+.cp-cc{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--ash);border-radius:6px;background:var(--bg1)}
+.cp-ccmsg{font-size:12px;color:var(--dim);flex:1;min-width:0}
+.cp-ccmsg.ok{color:var(--flare)}
+.cp-ccmsg.bad{color:var(--redshift)}
+.cp-cchelp{margin:0;font-size:11px;line-height:16px;color:var(--dim)}
 `;
 
 const STATE_TEXT: Record<CopilotState, string> = {
@@ -98,9 +104,11 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
   const prov = h("select", { "aria-label": "Copilot model", style: "flex:1" });
   const claudeGroup = h("optgroup", { label: "Claude · your API key" });
   for (const m of ANTHROPIC_MODELS) claudeGroup.append(h("option", { value: `anthropic:${m.id}` }, m.label));
+  const ccGroup = h("optgroup", { label: "Claude · your Claude Code sign-in" });
+  for (const m of CLAUDE_CODE_MODELS) ccGroup.append(h("option", { value: `claude-code:${m.id}` }, m.label));
   const localGroup = h("optgroup", { label: "Local server · free" });
   for (const [id, p] of Object.entries(LOCAL_PRESETS)) localGroup.append(h("option", { value: `local:${id}` }, `${p.label} :${new URL(p.baseUrl).port}`));
-  prov.append(claudeGroup, localGroup);
+  prov.append(claudeGroup, ccGroup, localGroup);
   const effort = h("select", { "aria-label": "Effort", title: "Effort: how hard the model thinks. Higher is slower and uses more tokens." });
   for (const e of EFFORTS) effort.append(h("option", { value: e.id }, e.label));
   pick.append(prov, effort);
@@ -129,13 +137,22 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
   keyForm.append(keyHelp, keyRow);
   key.append(keySaved, keyForm);
 
+  // Claude Code: install / sign-in status. The app never sees the login; `claude` handles it.
+  const cc = h("div", { class: "cp-cc", style: "display:none" });
+  const ccRow = h("div", { class: "cp-row" });
+  const ccMsg = h("span", { class: "cp-ccmsg", role: "status" }, "Checking for Claude Code…");
+  const ccCheck = h("button", { class: "cp-btn sm" }, "Check");
+  ccRow.append(ccMsg, ccCheck);
+  const ccHelp = h("p", { class: "cp-cchelp" }, "Runs the Claude Code you installed and signed into yourself, so turns count against your own Claude plan (or the key Claude Code is set up with). BlackHole-Dev never sees your login. Claude Code's own tools are switched off: it can only use the copilot's tools, and starting a VM or a run still needs your click.");
+  cc.append(ccRow, ccHelp);
+
   const testRow = h("div", { class: "cp-row" });
   const testBtn = h("button", { class: "cp-btn sm" }, "Test connection");
   const testMsg = h("span", { class: "cp-testmsg", role: "status" });
   testRow.append(testBtn, testMsg);
 
   const chips = h("div", { class: "cp-row" });
-  hd.append(top, pick, blurb, local, key, testRow, chips);
+  hd.append(top, pick, blurb, local, key, cc, testRow, chips);
 
   // Control bar
   const bar = h("div", { class: "cp-bar", role: "status" });
@@ -250,6 +267,25 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
 
   // ---- provider settings ----
   const isLocal = () => prov.value.startsWith("local:");
+  const isClaudeCode = () => prov.value.startsWith("claude-code:");
+  let ccStatus: ClaudeCodeStatus | null = null;
+
+  async function checkClaudeCode(fresh: boolean) {
+    if (ccStatus && !fresh) return ccStatus;
+    ccCheck.disabled = true;
+    ccMsg.className = "cp-ccmsg";
+    ccMsg.textContent = "Checking for Claude Code…";
+    try {
+      ccStatus = await deps.invoke("copilot:claudeStatus");
+    } catch (err) {
+      ccStatus = { installed: false, loggedIn: false, message: String(err) };
+    }
+    ccCheck.disabled = false;
+    ccMsg.className = `cp-ccmsg ${ccStatus!.loggedIn ? "ok" : "bad"}`;
+    ccMsg.textContent = ccStatus!.message;
+    testBtn.disabled = !ccStatus!.loggedIn;
+    return ccStatus;
+  }
   let keyEditing = false;
 
   function setConn(state: "ok" | "bad" | "", msg: string) {
@@ -265,6 +301,9 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
     if (settings.provider === "anthropic") {
       prov.value = `anthropic:${settings.model}`;
       effort.value = settings.effort;
+    } else if (settings.provider === "claude-code") {
+      prov.value = `claude-code:${settings.model}`;
+      effort.value = settings.effort;
     } else {
       prov.value = settings.preset === "custom" ? "local:mlx" : `local:${settings.preset}`;
       baseUrl.value = settings.baseUrl;
@@ -275,13 +314,19 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
 
   async function syncProviderUi() {
     const loc = isLocal();
+    const ccOn = isClaudeCode();
     local.style.display = loc ? "flex" : "none";
+    cc.style.display = ccOn ? "" : "none";
     effort.style.display = loc ? "none" : "";
-    const info = loc ? null : anthropicModel(prov.value.split(":")[1]);
-    blurb.textContent = loc ? "Runs on this Mac through an OpenAI-compatible server. No key, no cost." : info?.blurb ?? "";
-    key.classList.toggle("on", !loc);
+    const id = prov.value.split(":")[1];
+    blurb.textContent = loc ? "Runs on this Mac through an OpenAI-compatible server. No key, no cost." : ccOn ? claudeCodeModel(id)?.blurb ?? "" : anthropicModel(id)?.blurb ?? "";
+    key.classList.toggle("on", !loc && !ccOn);
     testBtn.disabled = false;
     if (loc) return;
+    if (ccOn) {
+      await checkClaudeCode(false);
+      return;
+    }
     const st: KeyStatus = await deps.invoke("copilot:keyStatus");
     keyLabel.replaceChildren(
       document.createTextNode("Key "),
@@ -308,6 +353,10 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
       const keep = settings?.provider === "anthropic" ? settings.effort : anthropicModel(id)?.defaultEffort ?? "high";
       effort.value = keep;
       await saveSettings({ provider: "anthropic", model: id, effort: keep });
+    } else if (kind === "claude-code") {
+      const keep = settings?.provider === "claude-code" ? settings.effort : claudeCodeModel(id)?.defaultEffort ?? "high";
+      effort.value = keep;
+      await saveSettings({ provider: "claude-code", model: id, effort: keep });
     } else {
       const preset = id as keyof typeof LOCAL_PRESETS;
       baseUrl.value = LOCAL_PRESETS[preset].baseUrl;
@@ -318,7 +367,7 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
   });
 
   effort.addEventListener("change", () => {
-    if (settings?.provider !== "anthropic") return;
+    if (settings?.provider !== "anthropic" && settings?.provider !== "claude-code") return;
     void saveSettings({ ...settings, effort: effort.value as Effort });
   });
 
@@ -345,6 +394,7 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
   }
 
   probeBtn.addEventListener("click", () => void connectLocal());
+  ccCheck.addEventListener("click", () => void checkClaudeCode(true));
   localModel.addEventListener("change", () => void saveLocal());
   baseUrl.addEventListener("change", () => void saveLocal());
 
@@ -385,7 +435,7 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
 
   testBtn.addEventListener("click", async () => {
     testBtn.disabled = true;
-    setConn("", isLocal() ? "Testing the local server…" : "Sending one tiny request (well under a cent)…");
+    setConn("", isLocal() ? "Testing the local server…" : isClaudeCode() ? "Asking Claude Code for one word…" : "Sending one tiny request (well under a cent)…");
     try {
       const r = await deps.invoke("copilot:test");
       setConn(r.ok ? "ok" : "bad", r.message);

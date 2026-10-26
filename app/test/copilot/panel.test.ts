@@ -86,4 +86,45 @@ describe("copilot panel", () => {
     expect(el.querySelector(".cp-testmsg")!.textContent).toBe("Your credit balance is too low.");
     expect(el.querySelector(".cp-conn")!.classList.contains("bad")).toBe(true);
   });
+
+  it("offers Claude Code in the picker, hides the key box, and shows the setup hint when it is missing", async () => {
+    const session = new CopilotSession({ editor: new FakeEditor(), activeFile: () => null, async *turn() {}, abortTurn() {}, helper: async () => ({}), invoke: async () => ({}) });
+    let settings: any = { provider: "anthropic", model: "claude-opus-5-5", effort: "high" };
+    let status: any = { installed: false, loggedIn: false, message: "Claude Code is not installed. Install Claude Code (curl …)" };
+    const el = document.createElement("div");
+    renderCopilotPanel(el, {
+      session,
+      activeFile: () => null,
+      onActiveFile: () => () => {},
+      invoke: async (c: string, arg?: any) => {
+        if (c === "copilot:settings") return settings;
+        if (c === "copilot:setSettings") return (settings = arg);
+        if (c === "copilot:keyStatus") return { has: true, hint: "sk-ant-…x7Qa", encryption: true };
+        if (c === "copilot:claudeStatus") return status;
+        return null;
+      },
+    });
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+    await tick();
+    await tick();
+    const [model] = [...el.querySelectorAll("select")] as HTMLSelectElement[];
+    expect([...model.querySelectorAll("optgroup")].map((g) => g.label)).toContain("Claude · your Claude Code sign-in");
+    model.value = "claude-code:opus";
+    model.dispatchEvent(new Event("change"));
+    await tick();
+    await tick();
+    expect(settings).toEqual({ provider: "claude-code", model: "opus", effort: "high" });
+    expect(el.querySelector(".cp-key")!.classList.contains("on")).toBe(false);
+    const cc = el.querySelector<HTMLElement>(".cp-cc")!;
+    expect(cc.style.display).toBe("");
+    expect(el.querySelector(".cp-ccmsg")!.textContent).toContain("not installed");
+    expect(el.querySelector(".cp-ccmsg")!.classList.contains("bad")).toBe(true);
+    expect([...el.querySelectorAll("button")].find((b) => b.textContent === "Test connection")!.disabled).toBe(true);
+    status = { installed: true, loggedIn: true, version: "2.1.310", authMethod: "claude.ai", message: "Claude Code 2.1.310, signed in with your Claude plan." };
+    [...el.querySelectorAll("button")].find((b) => b.textContent === "Check")!.click();
+    await tick();
+    await tick();
+    expect(el.querySelector(".cp-ccmsg")!.textContent).toContain("signed in with your Claude plan");
+    expect([...el.querySelectorAll("button")].find((b) => b.textContent === "Test connection")!.disabled).toBe(false);
+  });
 });

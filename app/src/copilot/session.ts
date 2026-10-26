@@ -29,13 +29,26 @@ export interface TurnRequest {
   tools: ReturnType<typeof llmTools>;
 }
 
+/** A tool call made inside a provider's own agent loop (Claude Code). The session runs it like
+ *  any other tool and answers with host.toolResult; the turn keeps streaming meanwhile. */
+export interface ToolRunChunk {
+  type: "tool_run";
+  callId: string;
+  name: string;
+  input: unknown;
+}
+
+export type TurnChunk = LlmChunk | ToolRunChunk;
+
 /** What the controller needs from the outside world. The renderer wires these to ctx.invoke / ctx.on. */
 export interface CopilotHost {
   editor: EditorStreamApi;
   activeFile(): string | null;
   /** Streams one model turn (runs in main). Must end with a done or error chunk. */
-  turn(req: TurnRequest): AsyncIterable<LlmChunk>;
+  turn(req: TurnRequest): AsyncIterable<TurnChunk>;
   abortTurn(turnId: string): void;
+  /** Answer a tool_run chunk. */
+  toolResult?(callId: string, result: { content: string; isError?: boolean }): void;
   /** I1 helper call (forwarded by main to the Python helper). */
   helper(method: string, params: object): Promise<unknown>;
   /** Invoke an owning module's main channel; that handler opens the I4 gate itself. */
@@ -349,6 +362,8 @@ export class CopilotSession {
         this.emit({ type: "reasoning", text: c.text });
       } else if (c.type === "tool_use") {
         res.toolCalls.push({ id: c.id, name: c.name, input: c.input });
+      } else if (c.type === "tool_run") {
+        this.runInTurn(c);
       } else if (c.type === "usage") {
         this.emit({ type: "usage", usage: c.usage });
       } else if (c.type === "done") {
@@ -434,6 +449,26 @@ export class CopilotSession {
     this.stopTimer = every(30, () => {
       for (const p of this.pacers) p.tick();
     });
+  }
+
+  /** A tool call from inside the provider's own loop: wait for code it already typed to land
+   *  (lint and plan read the live buffer), run it, and answer. Never throws. */
+  private runInTurn(c: ToolRunChunk): void {
+    void (async () => {
+      let out: LlmBlock;
+      try {
+        await Promise.all(this.pacerDone);
+        await this.waitWhilePaused();
+        out = this.stopRequested
+          ? { type: "tool_result", tool_use_id: c.callId, content: "Not run: the user interrupted.", is_error: true }
+          : (await this.runTools([{ id: c.callId, name: c.name, input: c.input }]))[0];
+        if (this.running && this._state === "tools") this.setState(this.paused ? "paused" : "thinking");
+      } catch (err) {
+        out = { type: "tool_result", tool_use_id: c.callId, content: String(err), is_error: true };
+      }
+      const r = out as Extract<LlmBlock, { type: "tool_result" }>;
+      this.host.toolResult?.(c.callId, { content: r.content, isError: r.is_error });
+    })();
   }
 
   private async runTools(calls: TurnResult["toolCalls"]): Promise<LlmBlock[]> {

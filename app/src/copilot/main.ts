@@ -1,7 +1,9 @@
-// Copilot, main-process side: runs model turns with the user's own key and forwards
-// helper (I1) calls for the copilot's cheap tools. The renderer drives the loop.
+// Copilot, main-process side: runs model turns with the user's own key (or their own signed-in
+// Claude Code) and forwards helper (I1) calls for the copilot's cheap tools. The renderer drives
+// the loop; for Claude Code, whose own loop owns the turn, tool calls come back here over a local
+// MCP bridge and are sent to the renderer to run (copilot:toolCall → copilot:toolResult).
 import type { MainContext } from "../shared/ext";
-import { anthropicModel, chat, DEFAULT_ANTHROPIC_MODEL, LOCAL_PRESETS, probe, testAnthropicConnection, testAnthropicKey, type ConnectionReport, type Effort, type LlmChunk } from "../llm";
+import { anthropicModel, chat, claudeCodeModel, claudeCodeStatus, DEFAULT_ANTHROPIC_MODEL, LOCAL_PRESETS, probe, testAnthropicConnection, testAnthropicKey, testClaudeCode, type ConnectionReport, type Effort, type LlmChunk } from "../llm";
 import type { TurnRequest } from "./session";
 import { HELPER_METHODS } from "./tools";
 
@@ -32,7 +34,16 @@ export function keyProblem(key: string): string | null {
 
 export type ProviderSettings =
   | { provider: "anthropic"; model: string; effort: Effort }
-  | { provider: "openai-compatible"; preset: keyof typeof LOCAL_PRESETS | "custom"; baseUrl: string; model: string };
+  | { provider: "openai-compatible"; preset: keyof typeof LOCAL_PRESETS | "custom"; baseUrl: string; model: string }
+  | { provider: "claude-code"; model: string; effort: Effort };
+
+/** A tool call from inside a Claude Code run, for the renderer to execute. */
+export interface ToolCallEvent {
+  turnId: string;
+  callId: string;
+  name: string;
+  input: unknown;
+}
 
 export const DEFAULT_SETTINGS: ProviderSettings = { provider: "anthropic", model: DEFAULT_ANTHROPIC_MODEL, effort: "high" };
 
@@ -43,6 +54,10 @@ export function normalizeSettings(s: ProviderSettings): ProviderSettings {
   if (s?.provider === "openai-compatible") {
     return { provider: "openai-compatible", preset: s.preset in LOCAL_PRESETS ? s.preset : "custom", baseUrl: String(s.baseUrl ?? ""), model: String(s.model ?? "") };
   }
+  if (s?.provider === "claude-code") {
+    const m = claudeCodeModel(String(s.model ?? "")) ?? claudeCodeModel("default")!;
+    return { provider: "claude-code", model: m.id, effort: EFFORT_SET.has(s.effort) ? s.effort : m.defaultEffort };
+  }
   const model = anthropicModel(s?.model ?? "") ? s.model : DEFAULT_ANTHROPIC_MODEL;
   const effort = EFFORT_SET.has((s as { effort?: Effort })?.effort as Effort) ? (s as { effort: Effort }).effort : anthropicModel(model)!.defaultEffort;
   return { provider: "anthropic", model, effort };
@@ -50,8 +65,13 @@ export function normalizeSettings(s: ProviderSettings): ProviderSettings {
 
 const ALLOWED_HELPER = new Set(Object.values(HELPER_METHODS));
 
+/** How long a tool call from Claude Code may wait on the renderer (a gated action waits on a human click). */
+const TOOL_WAIT_MS = 15 * 60_000;
+
 export function activate(ctx: MainContext): void {
   const turns = new Map<string, AbortController>();
+  const pendingTools = new Map<string, { turnId: string; resolve: (r: { content: string; isError?: boolean }) => void }>();
+  let callSeq = 0;
   const getSettings = () => normalizeSettings(ctx.settings.get<ProviderSettings>("copilot.provider", DEFAULT_SETTINGS));
 
   ctx.handle("copilot:settings", () => getSettings());
@@ -96,6 +116,7 @@ export function activate(ctx: MainContext): void {
   /** "Test connection" for whatever the panel has selected. */
   ctx.handle("copilot:test", async (): Promise<ConnectionReport> => {
     const s = getSettings();
+    if (s.provider === "claude-code") return testClaudeCode(s.model);
     if (s.provider === "anthropic") {
       const key = await ctx.secrets.get(KEY_NAME);
       if (!key) return { ok: false, message: "No API key saved yet. Paste yours above." };
@@ -109,6 +130,33 @@ export function activate(ctx: MainContext): void {
   });
 
   ctx.handle("copilot:probe", (baseUrl: string) => probe({ baseUrl }));
+  /** Is `claude` installed and signed in? Never reads the login itself. */
+  ctx.handle("copilot:claudeStatus", () => claudeCodeStatus());
+
+  ctx.handle("copilot:toolResult", (callId: string, result: { content: string; isError?: boolean }) => {
+    const p = pendingTools.get(callId);
+    if (!p) return false;
+    pendingTools.delete(callId);
+    p.resolve({ content: String(result?.content ?? ""), isError: !!result?.isError });
+    return true;
+  });
+
+  const runToolInRenderer = (turnId: string, signal: AbortSignal) => (name: string, input: unknown) =>
+    new Promise<{ content: string; isError?: boolean }>((resolve) => {
+      const callId = `${turnId}:${callSeq++}`;
+      const done = (r: { content: string; isError?: boolean }) => {
+        clearTimeout(timer);
+        signal.removeEventListener("abort", onAbort);
+        pendingTools.delete(callId);
+        resolve(r);
+      };
+      const onAbort = () => done({ content: "Not run: the user interrupted.", isError: true });
+      const timer = setTimeout(() => done({ content: "The tool did not answer in time.", isError: true }), TOOL_WAIT_MS);
+      if (signal.aborted) return onAbort();
+      signal.addEventListener("abort", onAbort, { once: true });
+      pendingTools.set(callId, { turnId, resolve: done });
+      ctx.send("copilot:toolCall", { turnId, callId, name, input } satisfies ToolCallEvent);
+    });
 
   ctx.handle("copilot:turn", async (req: TurnRequest) => {
     const s = getSettings();
@@ -128,7 +176,9 @@ export function activate(ctx: MainContext): void {
           messages: req.messages,
           tools: req.tools,
           signal: ctl.signal,
-          params: s.provider === "anthropic" ? { effort: s.effort, max_tokens: 64000 } : { max_tokens: 16384 },
+          params: s.provider === "openai-compatible" ? { max_tokens: 16384 } : { effort: s.effort, max_tokens: 64000 },
+          runTool: s.provider === "claude-code" ? runToolInRenderer(req.turnId, ctl.signal) : undefined,
+          cwd: s.provider === "claude-code" ? ctx.paths.workspace : undefined,
         });
         let ended = false;
         for await (const c of stream) {
