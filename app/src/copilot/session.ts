@@ -16,7 +16,11 @@ export type CopilotEvent =
   | { type: "user-message"; text: string; steer?: boolean }
   | { type: "prose"; text: string }
   | { type: "reasoning"; text: string }
-  | { type: "write"; file: string; mode: FenceInfo["mode"]; status: "start" | "done" | "stopped" }
+  | { type: "write"; file: string; mode: FenceInfo["mode"]; status: "start" | "done" | "stopped"; lang?: string }
+  /** Code the model is writing into `file`, as it streams (the panel shows it in a code box). */
+  | { type: "code"; file: string; text: string }
+  /** An edit_file call that was applied. */
+  | { type: "edit"; file: string; edits: { find: string; replace: string }[] }
   | { type: "tool"; id: string; name: string; status: "running" | "ok" | "error" | "waiting"; summary: string }
   | { type: "user-edit"; file: string; startLine: number; endLine: number; text: string }
   | { type: "usage"; usage: Usage }
@@ -334,14 +338,31 @@ export class CopilotSession {
     this.setState("thinking");
     const fence = new FenceSplitter();
     let pacer: Pacer | null = null;
+    // A fence with no path or mode (a shell command, an example) is chat-only: it goes to the
+    // panel as Markdown and never into a file.
+    let chatFence = false;
     const res: TurnResult = { text: "", toolCalls: [], finish: "stop" };
 
     const handle = (evs: ReturnType<FenceSplitter["push"]>) => {
       for (const e of evs) {
         if (e.type === "prose") this.emit({ type: "prose", text: e.text });
-        else if (e.type === "open") pacer = this.openPacer(e.info);
-        else if (e.type === "code") pacer?.push(e.text);
-        else if (e.type === "close" && pacer) {
+        else if (e.type === "open") {
+          if (e.info.path || e.info.modeSet) pacer = this.openPacer(e.info);
+          else {
+            chatFence = true;
+            this.emit({ type: "prose", text: "```" + e.info.lang + "\n" });
+          }
+        } else if (e.type === "code") {
+          if (chatFence) this.emit({ type: "prose", text: e.text });
+          else if (pacer) {
+            const p: Pacer = pacer;
+            p.push(e.text);
+            this.emit({ type: "code", file: p.file, text: e.text });
+          }
+        } else if (e.type === "close" && chatFence) {
+          chatFence = false;
+          this.emit({ type: "prose", text: "```\n" });
+        } else if (e.type === "close" && pacer) {
           const p: Pacer = pacer;
           pacer = null;
           this.pacerDone.push(
@@ -411,7 +432,7 @@ export class CopilotSession {
     this.pacers.push(p);
     this.ensureTimer();
     this.setState(this.paused ? "paused" : "writing", file);
-    this.emit({ type: "write", file, mode: info.mode, status: "start" });
+    this.emit({ type: "write", file, mode: info.mode, status: "start", lang: info.lang || undefined });
     return p;
   }
 
@@ -514,6 +535,7 @@ export class CopilotSession {
         if (!plan.ok) throw new Error(plan.error);
         this.touched.add(input.path);
         ed.applyEdits(input.path, plan.edits);
+        this.emit({ type: "edit", file: input.path, edits: input.edits });
         return { content: `Applied ${plan.edits.length} edit(s) to ${input.path}. They show as pending changes the user can accept or reject.`, summary: `edited ${input.path} · ${plan.edits.length} change(s)` };
       }
       case "request_action": {

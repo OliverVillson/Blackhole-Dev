@@ -6,6 +6,8 @@ export interface FenceInfo {
   lang: string;
   path?: string;
   mode: "new" | "rewrite" | "append";
+  /** The info string named a mode (mode=...), so the block is meant for a file even without a path. */
+  modeSet?: true;
 }
 
 export type FenceEvent =
@@ -26,7 +28,10 @@ export function parseFenceInfo(info: string): FenceInfo {
     const k = p.slice(0, eq);
     const v = p.slice(eq + 1).replace(/^["']|["']$/g, "");
     if (k === "path" || k === "file") out.path = v;
-    else if (k === "mode" && (v === "new" || v === "rewrite" || v === "append")) out.mode = v;
+    else if (k === "mode" && (v === "new" || v === "rewrite" || v === "append")) {
+      out.mode = v;
+      out.modeSet = true;
+    }
   }
   return out;
 }

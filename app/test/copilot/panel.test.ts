@@ -128,3 +128,63 @@ describe("copilot panel", () => {
     expect([...el.querySelectorAll("button")].find((b) => b.textContent === "Test connection")!.disabled).toBe(false);
   });
 });
+
+describe("copilot panel code boxes", () => {
+  it("shows written files, edits and code in replies in highlighted code boxes with Copy", async () => {
+    const ed = new FakeEditor();
+    let tick: (() => void) | null = null;
+    const timer = setInterval(() => { for (let i = 0; i < 50; i++) tick?.(); }, 1);
+    let turn = 0;
+    const session = new CopilotSession({
+      editor: ed,
+      activeFile: () => null,
+      async *turn() {
+        if (turn++ === 0) {
+          yield { type: "text", text: "Here it is. Run `blackhole plan` after:\n```bash\nblackhole plan recipes/q.py\n```\n" };
+          yield { type: "text", text: "```python path=recipes/q.py mode=new\nimport os\nrecipe = Recipe(\"me/q\", \"1.0.0\")\n```\n" };
+          yield { type: "tool_use", id: "e1", name: "edit_file", input: { path: "recipes/q.py", edits: [{ find: "1.0.0", replace: "1.1.0" }] } };
+          yield { type: "done", finishReason: "tool_use" };
+        } else {
+          yield { type: "text", text: "Done." };
+          yield { type: "done", finishReason: "stop" };
+        }
+      },
+      abortTurn() {},
+      helper: async () => ({}),
+      invoke: async () => ({}),
+      readFile: async () => { throw new Error("missing"); },
+      every: (_ms, fn) => { tick = fn; return () => (tick = null); },
+      pacer: { lookaheadLines: 1, charsPerTick: 8 },
+    });
+    const el = document.createElement("div");
+    document.body.append(el);
+    renderCopilotPanel(el, { session, activeFile: () => null, onActiveFile: () => () => {}, invoke: async () => null });
+    await session.ask("make q");
+    clearInterval(timer);
+    // The shell command stays in the chat (a code box), never in a file.
+    expect(ed.getText("recipes/q.py")).not.toContain("blackhole plan");
+    const reply = el.querySelector(".cp-ai")!;
+    expect(reply.querySelector("code")!.textContent).toBe("blackhole plan");
+    expect(reply.querySelector(".bhc-code pre")!.textContent).toBe("blackhole plan recipes/q.py");
+    expect(reply.querySelector(".bhc-copy")).not.toBeNull();
+    // The written file gets its own box with the path, highlighted code and a final status.
+    const [file, edit] = [...el.querySelectorAll(".cp-box")];
+    expect(file.querySelector(".path")!.textContent).toBe("recipes/q.py");
+    expect(file.querySelector(".tag")!.textContent).toBe("python");
+    expect(file.querySelector("pre")!.textContent).toBe('import os\nrecipe = Recipe("me/q", "1.0.0")\n');
+    expect(file.querySelector(".t-kw")!.textContent).toBe("import");
+    expect(file.querySelector(".st")!.textContent).toContain("written");
+    expect(edit.querySelector(".tag")!.textContent).toBe("edit");
+    expect(edit.querySelector(".d-del")!.textContent).toBe("- 1.0.0");
+    expect(edit.querySelector(".d-add")!.textContent).toBe("+ 1.1.0");
+    // Copy puts the box's code on the clipboard.
+    let copied = "";
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: async (t: string) => void (copied = t) }, configurable: true });
+    (file.querySelector(".cp-copy") as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(copied).toBe('import os\nrecipe = Recipe("me/q", "1.0.0")\n');
+    (edit.querySelector(".cp-copy") as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(copied).toBe("1.1.0");
+  });
+});
