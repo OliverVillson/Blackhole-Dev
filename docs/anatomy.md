@@ -212,9 +212,80 @@ steps = [
   value = 0.2
 ```
 
-Built-in functions: `reap-score reap-prune drop-experts merge-similar-experts reorder-by-score
-drop-layers duplicate-layers prune-neurons trim-head quant reaq hex-quantize hex-pack freeze
-train router-temperature clip-outliers zero-small scale add-noise fake-quant`.
+## Built-ins are readable, forkable source
+
+Every built-in is one file in `blackhole_dev/functions_src/` (shared helpers in `_helpers.py`
+and `_teacher.py`), and every preset recipe is built only from them, so nothing a preset does is
+out of reach. Model-level built-ins: `reap-score reap-prune drop-experts merge-similar-experts
+reorder-by-score drop-layers duplicate-layers prune-neurons trim-head quant reaq hex-quantize
+hex-pack freeze train router-temperature clip-outliers zero-small scale add-noise fake-quant`.
+
+**The override rule.** Each definition sits in a layer, and for a name the highest layer wins
+everywhere (recipes, `model.edit`, the CLI, the app):
+
+| layer | where |
+|---|---|
+| 0 builtin | `blackhole_dev/functions_src/*.py` |
+| 1 package | installed packages' `blackhole.functions` entry points |
+| 2 user | `$BLACKHOLE_DEV_FUNCTIONS` (os.pathsep-separated), else `~/.blackhole-dev/functions` |
+| 3 workspace | `<project>/functions/*.py` of the project open in the app |
+| 4 recipe | the recipe file itself, files it names, a bundle's `functions/`, code run directly |
+
+So a user function named like a built-in replaces it; two definitions of one name in the same
+layer are an error (reported by `functions.problems()`, the registry keeps working).
+
+**Fork.** `blackhole fn fork reaq` (or Fork in the app) copies the file of the definition that
+currently wins into your functions folder. Kept under the same name it replaces the original;
+`--as my-reaq` makes a separate function next to it. The copy's first line records what it was
+forked from and that file's sha256, so the app can tell you when the original changed. Forking
+every built-in a recipe uses, unchanged, gives byte-identical output (tested), and the receipt
+pins which code ran.
+
+```python
+from blackhole_dev import functions as fns
+fns.rows()                      # every function: per, params, layer, path, sha256, overrides, forked_from
+fns.source("hex-quantize")      # {path, text, sha256, readonly, ...}
+fns.fork("reaq")                # -> ~/.blackhole-dev/functions/reaq.py, now the one that runs
+fns.fork("reap-prune", new_name="my-prune")
+fns.refresh()                   # re-read the user and workspace folders after a save
+```
+
+## Job functions: the pipeline's GPU stages, forkable too
+
+`per="job"` functions run a stage of the GPU pipeline on a `blackhole_dev.jobctx.Job` (the job
+folder on the VM). A recipe step `recipe.fn("distil", ...)` compiles to a `job.fn` stage, which
+the pipeline runs as `python -m blackhole_dev.jobctx --job <job> --stage <id>`; a fork in the
+recipe bundle or your functions folder replaces the built-in stage.
+
+| function | what | pipeline stage(s) |
+|---|---|---|
+| `calibrate` | detect, plan, download, teacher-written calibration + held-out set (reuses an earlier job's) | detect plan weights calibrate |
+| `reap-gpu` | REAP scores, prune `ratio`, KL / top-1 vs the teacher | score prune eval |
+| `traces` | verified shortest-trace data: teacher solves problems `samples` times, tests run, shortest pass kept (ported in full) | (heal's data) |
+| `distil` | distillation heal from the teacher, or from your own `data` rows; on-policy rounds, layer / router matching | heal |
+| `gptq` | GPTQ int4 W4A16 on the routed experts | gptq |
+| `reaq-codebook` | REAQ per-expert 16 / 8-level tables, measured | reaq |
+| `mlx-export` | MLX folder: GPTQ or HEX experts, REAQ tiers, attention / head bits | mlx |
+| `qheal` | heal after quantization around the frozen low-bit experts | qheal |
+| `bench` | LiveCodeBench pass@1 + thinking budgets of any models (ported in full) | bench |
+| `fp8-experts` | REAPer's fp8-expert folder | quant |
+| `package` | model cards, receipt, RESULTS.md | package |
+
+```python
+@function("distil-twice", per="job")
+def distil_twice(job, minutes: int = 60) -> dict:
+    job.call("traces", samples=4, think_budget=8192)       # a fork of traces runs if you have one
+    first = job.call("distil", minutes=minutes, keep_weights="last")
+    job.emit(pct=50, msg=f"round 1 KL {first['kl_after']:.3f}")
+    return job.run_stage("heal", fresh=True, heal_lr=1e-6)  # any pipeline knob, any stage
+```
+
+`job.params` holds every pipeline knob, `job.set(**knobs)` changes them for the later stages
+(as a schema step's params always did), `job.run_stage(name, **knobs)` runs one of the
+pipeline's own stage processes with its events relayed as your stage, and `job.call(name)` runs
+another job function. Every knob of `blackhole_pipeline.DEFAULTS` is a parameter of one of the
+built-ins (tested); None leaves a knob as the pipeline has it. A stage exits 0 when done, 1 on
+an error, 3 when one of its gates failed.
 
 ## The live model: training subsets, scores, KL
 
@@ -249,7 +320,8 @@ blackhole inspect MODEL "layers[3].moe.experts" --scores saliency.json
 blackhole inspect MODEL "experts[0:8]" --stats | --measure hex3,int4
 blackhole inspect MODEL --plan --device M-series-16GB --quant "experts=hex3,layers[*].attn=int4"
 blackhole inspect MODEL --tensors
-blackhole fn list | show NAME
+blackhole fn list | show NAME | source NAME
+blackhole fn fork NAME [--as NEW] [--to DIR]       copy a function into your functions folder
 blackhole fn run MODEL reap-prune --scores saliency.json --set ratio=0.25 -o out/
 blackhole fn run MODEL hex-quantize -o out/ --pack hex
 ```
