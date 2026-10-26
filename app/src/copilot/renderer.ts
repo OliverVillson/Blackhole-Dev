@@ -29,7 +29,7 @@ export function activate(ctx: RendererContext): void {
   });
 
   let panelEl: HTMLElement | null = null;
-  ctx.registerActivity({ id: "copilot", title: "Copilot", icon: ICON, order: 50, run: () => void ctx.executeCommand("copilot.ask") });
+  ctx.registerActivity({ id: "copilot", title: "Copilot", icon: ICON, order: 50, rightPanel: "copilot", run: () => void ctx.executeCommand("copilot.ask") });
   ctx.registerRightPanel({
     id: "copilot",
     title: "Copilot",

@@ -134,9 +134,9 @@ async function boot(): Promise<void> {
       bh.invoke("app:reveal", r.bundle).catch(() => undefined);
     }
   });
-  cmd("view.sidebar", "Toggle sidebar", () => shell.toggleSidebar());
+  cmd("view.sidebar", "Toggle left side bar", () => shell.toggleSidebar());
   cmd("view.panel", "Toggle panel", () => shell.togglePanel());
-  cmd("view.inspector", "Toggle inspector", () => shell.toggleRight());
+  cmd("view.inspector", "Toggle right side bar", () => shell.toggleRight());
   cmd("panel.problems", "Show problems", () => shell.showPanel("problems"));
   cmd("helper.restart", "Restart Python helper", () => bh.invoke("helper:restart").catch(report));
   cmd("terminal.new", "New terminal", () => terms.newShell());
@@ -171,6 +171,7 @@ async function boot(): Promise<void> {
       toast(`Module ${id} failed to load: ${(e as Error).message}`, "error");
     }
   }
+  shell.restoreLayout();
   bh.invoke<HelperStatus>("helper:status").then((s) => s && shell.setHelperStatus(s));
   (window as unknown as { __shell: Shell }).__shell = shell; // handy in DevTools and for UI tests
 }

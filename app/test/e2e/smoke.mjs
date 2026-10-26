@@ -122,6 +122,50 @@ await win.screenshot({ path: join(out, "04-anatomy.png") });
 await win.evaluate(() => window.__shell.showActivity("functions"));
 await win.waitForSelector("text=hex-quantize");
 await win.screenshot({ path: join(out, "05-functions.png") });
+
+// Side bars collapse fully to the icon strip and reopen from their icons.
+const hidden = (sel) => win.evaluate((s) => document.querySelector(s).classList.contains("hidden"), sel);
+const icon = (title) => `nav.activity button[title="${title}"]`;
+await win.click(icon("Named functions"));
+assert(await hidden(".sidebar"), "clicking the active icon collapses the left side bar");
+assert(!(await win.evaluate(() => document.querySelector("nav.activity .ab.on[title='Named functions']"))), "collapsed side bar leaves its icon unlit");
+await win.screenshot({ path: join(out, "09-sidebars-collapsed.png") });
+await win.click(icon("Recipes"));
+assert(!(await hidden(".sidebar")), "clicking an icon reopens the left side bar");
+await win.keyboard.press("Control+B");
+assert(await hidden(".sidebar"), "Cmd+B collapses the left side bar");
+await win.keyboard.press("Control+B");
+assert(!(await hidden(".sidebar")), "Cmd+B reopens the left side bar");
+await win.click(icon("Copilot"));
+assert(!(await hidden("aside.right")), "the Copilot icon opens the right side bar");
+await win.click(icon("Copilot"));
+assert(await hidden("aside.right"), "the Copilot icon again collapses it");
+await win.click(icon("Copilot"));
+await win.click(".right-close");
+assert(await hidden("aside.right"), "the × collapses the right side bar");
+// Drag the left sash to the activity bar to collapse, then back out to reopen.
+const sideSash = async () => (await win.locator(".body > .sash.v").first().boundingBox());
+let b = await sideSash();
+await win.mouse.move(b.x + 2, b.y + 200);
+await win.mouse.down();
+await win.mouse.move(60, b.y + 200, { steps: 8 });
+await win.mouse.up();
+assert(await hidden(".sidebar"), "dragging the sash to the edge collapses the side bar");
+b = await sideSash();
+await win.mouse.move(b.x + 2, b.y + 200);
+await win.mouse.down();
+await win.mouse.move(b.x + 320, b.y + 200, { steps: 8 });
+await win.mouse.up();
+assert(!(await hidden(".sidebar")), "dragging the sash back out reopens it");
+// Left collapsed and right open survive a reload.
+await win.click(icon("Recipes"));
+await win.click(icon("Copilot"));
+await win.reload();
+await win.waitForSelector("nav.activity button[title='Copilot']");
+await win.waitForFunction(() => window.__shell);
+assert(await hidden(".sidebar"), "collapsed left side bar is remembered");
+assert(!(await hidden("aside.right")), "open right side bar is remembered");
+await win.click(icon("Recipes"));
 await app.close();
 if (errors.length) {
   console.error("renderer errors:\n" + errors.join("\n"));

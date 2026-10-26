@@ -62,6 +62,8 @@ export interface ActivityDef {
   order?: number;
   /** Runs on click instead of opening a sidebar view, for an activity that lives elsewhere (the Copilot panel). */
   run?: () => void;
+  /** The right-hand panel this icon stands for: clicking it opens that panel, or collapses it when it is open. */
+  rightPanel?: string;
 }
 
 export interface PanelDef {
