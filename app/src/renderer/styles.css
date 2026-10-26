@@ -132,6 +132,8 @@ button.chip { cursor: pointer; }
 
 /* right panel */
 .right-tabs { display: flex; gap: 16px; padding: 0 16px; height: 36px; align-items: center; border-bottom: 1px solid var(--line); flex: none; }
+.right-close { margin-left: auto; background: none; border: 0; color: var(--dim); font-size: 18px; line-height: 1; padding: 0 2px; cursor: pointer; }
+.right-close:hover { color: var(--text); }
 .right-body { flex: 1; min-height: 0; overflow: auto; position: relative; }
 .right-body > .pane { position: absolute; inset: 0; overflow: auto; }
 .right-body > .pane.hidden { display: none; }

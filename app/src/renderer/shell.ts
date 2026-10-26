@@ -95,6 +95,9 @@ export class Shell {
   private right = h("aside", { class: "right", "aria-label": "Inspector" });
   private rightTabs = h("div", { class: "right-tabs", role: "tablist" });
   private rightBody = h("div", { class: "right-body" });
+  private rightClose = h("button", { class: "right-close", title: `Hide the right side bar (${prettyKeys("Cmd+Alt+B")})`, "aria-label": "Hide the right side bar", onclick: () => this.hideRight() }, "×");
+  /** Saving waits for restoreLayout(), so boot defaults never overwrite what the user left. */
+  private layoutRestored = false;
   private statusLeft = h("div", { class: "row", style: "gap:18px;flex-wrap:nowrap" });
   private statusRight = h("div", { class: "row", style: "gap:18px;flex-wrap:nowrap" });
 
@@ -103,6 +106,7 @@ export class Shell {
     this.panel.append(this.panelTabs, this.panelBody);
     this.panelTabs.append(this.panelNote);
     this.right.append(this.rightTabs, this.rightBody);
+    this.rightTabs.append(this.rightClose);
 
     const title = h("header", { class: `titlebar${isMac ? " mac" : ""}` },
       h("div", { class: "brand" }, h("span", { html: ICONS.logo }), h("b", null, "BLACKHOLE", h("span", null, "//"), "DEV")),
@@ -114,9 +118,9 @@ export class Shell {
       this.panel);
     const body = h("div", { class: "body" },
       h("nav", { class: "activity", "aria-label": "Activity bar" }, this.activityTop, this.activityBottom),
-      this.sidebar, this.sash("v", this.sidebar, "width", 1, 200, 560),
+      this.sidebar, this.sash("v", this.sidebar, "width", 1, 200, 560, (open) => (open ? this.showActivity(this.activeActivity ?? "recipes") : this.hideSidebar())),
       center,
-      this.sash("v", this.right, "width", -1, 260, 640), this.right);
+      this.sash("v", this.right, "width", -1, 260, 640, (open) => (open ? this.toggleRight() : this.hideRight())), this.right);
     const status = h("footer", { class: "status" }, this.statusLeft, h("div", { class: "spacer" }), this.statusRight);
     mount.append(title, body, status);
     this.editor = new EditorManager();
@@ -136,21 +140,33 @@ export class Shell {
 
   // ---- layout pieces -------------------------------------------------------
 
-  private sash(dir: "v" | "h", target: HTMLElement, prop: "width" | "height", sign: 1 | -1, min: number, max: number): HTMLElement {
+  /** A drag handle. With `toggle`, dragging past half the minimum collapses the target and
+   *  dragging a collapsed target back out reopens it (as in VS Code). */
+  private sash(dir: "v" | "h", target: HTMLElement, prop: "width" | "height", sign: 1 | -1, min: number, max: number, toggle?: (open: boolean) => void): HTMLElement {
     const s = h("div", { class: `sash ${dir}`, role: "separator", "aria-orientation": dir === "v" ? "vertical" : "horizontal" });
     s.addEventListener("mousedown", (e) => {
       e.preventDefault();
       const start = dir === "v" ? e.clientX : e.clientY;
-      const size = target.getBoundingClientRect()[prop];
+      const hidden = () => target.classList.contains("hidden");
+      const size = hidden() ? 0 : target.getBoundingClientRect()[prop];
       s.classList.add("drag");
       const move = (ev: MouseEvent) => {
-        const d = (dir === "v" ? ev.clientX : ev.clientY) - start;
-        target.style[prop] = `${Math.min(max, Math.max(min, size + sign * d))}px`;
+        const want = size + sign * ((dir === "v" ? ev.clientX : ev.clientY) - start);
+        if (toggle && want < min / 2) {
+          if (!hidden()) toggle(false);
+          return;
+        }
+        if (hidden()) {
+          if (!toggle) return;
+          toggle(true);
+        }
+        target.style[prop] = `${Math.min(max, Math.max(min, want))}px`;
       };
       const up = () => {
         s.classList.remove("drag");
         removeEventListener("mousemove", move);
         removeEventListener("mouseup", up);
+        this.saveLayout();
       };
       addEventListener("mousemove", move);
       addEventListener("mouseup", up);
@@ -162,12 +178,37 @@ export class Shell {
 
   registerActivity(def: ActivityDef, bottom = false): void {
     if (this.activities.has(def.id)) throw new Error(`activity exists: ${def.id}`);
-    const button = h("button", { class: "ab", "aria-label": def.title, title: def.title, html: def.icon, onclick: () => (def.run ? def.run() : this.toggleActivity(def.id)) });
+    const button = h("button", { class: "ab", "aria-label": def.title, title: def.title, html: def.icon, onclick: () => this.clickActivity(def.id) });
     button.dataset.order = String(def.order ?? 100);
     this.activities.set(def.id, { def, button });
     const box = bottom ? this.activityBottom : this.activityTop;
     const after = [...box.children].find((c) => Number((c as HTMLElement).dataset.order) > (def.order ?? 100));
     box.insertBefore(button, after ?? null);
+    this.markActivities();
+  }
+
+  /** Clicking an icon opens its side bar; clicking the icon of the open one collapses it. */
+  clickActivity(id: string): void {
+    const a = this.activities.get(id);
+    if (!a) return;
+    const { def } = a;
+    if (def.rightPanel) {
+      if (this.isRightOpen(def.rightPanel)) this.hideRight();
+      else if (def.run) def.run();
+      else this.showRight(def.rightPanel);
+    } else if (def.run) def.run();
+    else this.toggleActivity(id);
+  }
+
+  /** Lights the icon of each open side bar: one on the left, one for the right. */
+  private markActivities(): void {
+    const left = this.sidebar.classList.contains("hidden") ? null : this.activeActivity;
+    const right = this.right.classList.contains("hidden") ? null : this.activeRight;
+    for (const [k, x] of this.activities) {
+      const on = x.def.rightPanel ? x.def.rightPanel === right : k === left;
+      x.button.classList.toggle("on", on);
+      x.button.setAttribute("aria-pressed", String(on));
+    }
   }
 
   registerSidebarView(activityId: string, v: { render: Mount }): void {
@@ -178,23 +219,24 @@ export class Shell {
   }
 
   toggleActivity(id: string): void {
-    if (this.activeActivity === id && !this.sidebar.classList.contains("hidden")) {
-      this.sidebar.classList.add("hidden");
-      this.activities.get(id)?.button.classList.remove("on");
-      return;
-    }
-    this.showActivity(id);
+    if (this.activeActivity === id && !this.sidebar.classList.contains("hidden")) this.hideSidebar();
+    else this.showActivity(id);
+  }
+
+  hideSidebar(): void {
+    this.sidebar.classList.add("hidden");
+    this.markActivities();
+    this.saveLayout();
   }
 
   showActivity(id: string): void {
     const a = this.activities.get(id);
     if (!a) return;
-    for (const [k, x] of this.activities) {
-      x.button.classList.toggle("on", k === id);
-      x.pane?.classList.add("hidden");
-    }
+    for (const x of this.activities.values()) x.pane?.classList.add("hidden");
     this.activeActivity = id;
     this.sidebar.classList.remove("hidden");
+    this.markActivities();
+    this.saveLayout();
     if (!a.pane) {
       a.pane = h("div", { style: "display:flex;flex-direction:column;min-height:100%" });
       this.sidebar.append(a.pane);
@@ -259,17 +301,72 @@ export class Shell {
   }
 
   registerRightPanel(def: PanelDef): void {
-    this.addSlot(this.rights, this.rightTabs, this.rightBody, def, (id) => this.showRight(id));
+    this.addSlot(this.rights, this.rightTabs, this.rightBody, def, (id) => this.showRight(id), this.rightClose);
     if (!this.activeRight) this.pick(this.rights, def.id), (this.activeRight = def.id);
   }
 
   showRight(id: string): void {
+    if (!this.rights.has(id)) return;
     this.right.classList.remove("hidden");
     if (this.pick(this.rights, id)) this.activeRight = id;
+    this.markActivities();
+    this.saveLayout();
+  }
+
+  hideRight(): void {
+    this.right.classList.add("hidden");
+    this.markActivities();
+    this.saveLayout();
+  }
+
+  isRightOpen(id?: string): boolean {
+    return !this.right.classList.contains("hidden") && (id === undefined || this.activeRight === id);
   }
 
   toggleRight(): void {
-    this.right.classList.toggle("hidden");
+    if (this.isRightOpen()) this.hideRight();
+    else if (this.activeRight) this.showRight(this.activeRight);
+  }
+
+  // ---- saved side bar layout -----------------------------------------------
+
+  private static readonly LAYOUT_KEY = "bh.shell.sidebars";
+
+  private saveLayout(): void {
+    if (!this.layoutRestored) return;
+    const side = (el: HTMLElement, active: string | null) => ({ open: !el.classList.contains("hidden"), active, width: el.style.width || undefined });
+    try {
+      localStorage.setItem(Shell.LAYOUT_KEY, JSON.stringify({ left: side(this.sidebar, this.activeActivity), right: side(this.right, this.activeRight) }));
+    } catch {
+      /* storage unavailable: the layout just isn't remembered */
+    }
+  }
+
+  /** Reopens the side bars as the user left them. Call once every module has registered. */
+  restoreLayout(): void {
+    type Side = { open?: boolean; active?: string | null; width?: string };
+    let saved: { left?: Side; right?: Side } | null = null;
+    try {
+      saved = JSON.parse(localStorage.getItem(Shell.LAYOUT_KEY) ?? "null");
+    } catch {
+      saved = null;
+    }
+    const width = (el: HTMLElement, w?: string) => w && /^\d+(\.\d+)?px$/.test(w) && (el.style.width = w);
+    if (saved?.left) {
+      const { open, active, width: w } = saved.left;
+      width(this.sidebar, w);
+      if (active && this.activities.has(active) && !this.activities.get(active)!.def.run && !this.activities.get(active)!.def.rightPanel) this.activeActivity = active;
+      if (open === false) this.sidebar.classList.add("hidden");
+      else this.showActivity(this.activeActivity ?? "recipes");
+    }
+    if (saved?.right) {
+      const { open, active, width: w } = saved.right;
+      width(this.right, w);
+      if (active && this.rights.has(active)) this.activeRight = active;
+      if (open && this.activeRight) this.showRight(this.activeRight);
+    }
+    this.markActivities();
+    this.layoutRestored = true;
   }
 
   // ---- editor groups and tabs ---------------------------------------------
@@ -862,10 +959,7 @@ export class Shell {
 
   toggleSidebar(): void {
     if (this.sidebar.classList.contains("hidden")) this.showActivity(this.activeActivity ?? "recipes");
-    else {
-      this.sidebar.classList.add("hidden");
-      for (const x of this.activities.values()) x.button.classList.remove("on");
-    }
+    else this.hideSidebar();
   }
 
   // ---- status bar ----------------------------------------------------------
