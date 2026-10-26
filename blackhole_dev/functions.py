@@ -256,6 +256,18 @@ def _exec_file(p: Path, layer: int) -> str:
     return sha
 
 
+def python_files(d: Path) -> list[Path]:
+    """Every .py file under d, subfolders included (the app groups functions into folders).
+    Skips names starting with "_" or "." and __pycache__."""
+    out = []
+    for p in sorted(d.rglob("*.py")):
+        parts = p.relative_to(d).parts
+        if any(x.startswith(("_", ".")) for x in parts):
+            continue
+        out.append(p)
+    return out
+
+
 def refresh() -> list[dict]:
     """Re-read the user and workspace folders (after a file was saved, added or deleted).
     Returns problems(): files that failed to load."""
@@ -270,9 +282,7 @@ def refresh() -> list[dict]:
         for d in dirs:
             if not d.is_dir():
                 continue
-            for p in sorted(d.glob("*.py")):
-                if p.name.startswith("_"):
-                    continue
+            for p in python_files(d):
                 _sha_cache.pop(str(p.resolve()), None)
                 try:
                     _exec_file(p, layer)

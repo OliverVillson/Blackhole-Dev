@@ -5,7 +5,7 @@ import { Shell } from "./shell";
 import { bh, helper } from "./bridge";
 import { ICONS, basename } from "./dom";
 import { prompt, toast } from "./ui";
-import { recipesView, newRecipe, newFunction } from "./views/recipes";
+import { recipesView, newRecipe, newFunction, newFolder } from "./views/recipes";
 import { functionsView, showFunction, forkFunction } from "./views/functions";
 import { Anatomy } from "./views/anatomy";
 import { settingsView } from "./views/settings";
@@ -53,8 +53,10 @@ async function boot(): Promise<void> {
   cmd("palette.open", "Quick open", () => openPalette(shell));
   cmd("palette.commands", "Show all commands", () => openPalette(shell, ">"));
   cmd("search.workspace", "Find in files", () => openSearch(shell));
-  cmd("recipe.new", "New recipe", () => newRecipe(shell).catch(report));
-  cmd("function.new", "New function", () => newFunction(shell).catch(report));
+  cmd("recipe.new", "New recipe", (dir?: unknown) => newRecipe(shell, typeof dir === "string" ? dir : undefined).catch(report));
+  cmd("function.new", "New function", (dir?: unknown) => newFunction(shell, typeof dir === "string" ? dir : undefined).catch(report));
+  cmd("recipe.newFolder", "New recipe folder", (dir?: unknown) => newFolder(shell, typeof dir === "string" ? dir : shell.paths.recipes).catch(report));
+  cmd("function.newFolder", "New function folder", (dir?: unknown) => newFolder(shell, typeof dir === "string" ? dir : shell.paths.functions).catch(report));
   cmd("function.show", "Show function source", (name: string) => showFunction(shell, name).catch(report));
   cmd("function.fork", "Fork built-in function", (name: string) => forkFunction(shell, name).catch(report));
   cmd("recipe.importToml", "Import TOML schema", async () => {

@@ -30,6 +30,11 @@ export function clear(el: Element): void {
   while (el.firstChild) el.removeChild(el.firstChild);
 }
 
+export function dirname(p: string): string {
+  const i = p.replace(/\/+$/, "").lastIndexOf("/");
+  return i <= 0 ? "/" : p.slice(0, i);
+}
+
 export function basename(p: string): string {
   return p.split(/[\\/]/).pop() ?? p;
 }

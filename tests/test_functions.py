@@ -108,6 +108,17 @@ def test_fork_under_a_new_name_sits_next_to_the_builtin(user):
         fns.fork("my-prune")
 
 
+def test_functions_in_subfolders_load_and_private_folders_do_not(user):
+    (user / "quant" / "hex").mkdir(parents=True)
+    (user / "quant" / "hex" / "deep.py").write_text("from blackhole_dev import function\n"
+                                                    "@function('deep-scale')\ndef s(w, select: str = ''):\n    return w\n")
+    (user / "_scratch").mkdir()
+    (user / "_scratch" / "skip.py").write_text("raise RuntimeError('should not load')\n")
+    assert fns.refresh() == []
+    assert fns.get("deep-scale").layer == fns.USER
+    assert fns.get("deep-scale").path.endswith("deep.py")
+
+
 def test_layers_workspace_beats_user_and_same_layer_twice_is_a_problem(tmp_path, user):
     (user / "a.py").write_text("from blackhole_dev import function\n"
                                "@function('scale')\ndef s(w, factor: float = 1.0, select: str = ''):\n    return w * 2\n")

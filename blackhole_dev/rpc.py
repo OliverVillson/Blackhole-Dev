@@ -204,7 +204,7 @@ class Helper:
             return [], [{"error": str(x)} for x in probs or []]
         loaded, failed = [], []
         for d in dirs:
-            for f in sorted(Path(d).expanduser().glob("*.py")):
+            for f in fns.python_files(Path(d).expanduser()) if hasattr(fns, "python_files") else []:
                 try:
                     fns.load(str(f))
                     loaded.append(str(f))

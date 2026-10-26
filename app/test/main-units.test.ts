@@ -54,6 +54,29 @@ describe("workspace", () => {
     await expect(ws.read(join(p.workspace, "..", "x"))).rejects.toThrow(/outside/);
     expect((await ws.list(p.recipes)).map((e) => e.name)).toEqual(["a-b-2.py", "a-b.py", "first-recipe.py"]);
   });
+
+  it("groups files into folders: mkdir, create in a subfolder, move, refuse moving into itself", async () => {
+    const root = mkdtempSync(join(tmpdir(), "ws-"));
+    const p = workspacePaths(join(root, "w"), root);
+    ensureWorkspace(p);
+    const ws = new Workspace(p);
+    const qwen = await ws.mkdir(p.recipes, "qwen");
+    await expect(ws.mkdir(p.recipes, "qwen")).rejects.toThrow(/exists/);
+    const nested = await ws.create(p.recipes, "mac/int 4.py", "x");
+    expect(nested).toBe(join(p.recipes, "mac", "int-4.py"));
+    await expect(ws.create(p.recipes, "../../escape.py", "x")).resolves.toBe(join(p.recipes, "escape.py"));
+    const moved = await ws.move(join(p.recipes, "first-recipe.py"), qwen);
+    expect(moved).toBe(join(qwen, "first-recipe.py"));
+    await expect(ws.move(join(p.recipes, "escape.py"), qwen)).resolves.toBe(join(qwen, "escape.py"));
+    await expect(ws.move(join(qwen, "escape.py"), qwen)).resolves.toBe(join(qwen, "escape.py"));
+    const macDir = join(p.recipes, "mac");
+    await expect(ws.move(p.recipes, macDir)).rejects.toThrow(/into itself/);
+    await ws.move(macDir, qwen);
+    const tree = await ws.list(p.recipes);
+    expect(tree.map((e) => [e.name, e.dir])).toEqual([["qwen", true]]);
+    expect(tree[0].children!.map((e) => e.name)).toEqual(["escape.py", "first-recipe.py", "mac"]);
+    await expect(ws.move(qwen, "/tmp")).rejects.toThrow(/outside/);
+  });
 });
 
 describe("python and licence", () => {
