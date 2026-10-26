@@ -4,7 +4,7 @@ import { focusCopilot, renderCopilotPanel } from "./panel";
 import { CopilotSession, type CopilotState } from "./session";
 import { makeTurnTransport } from "./transport";
 
-const ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/></svg>`;
+const ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M11 3c.6 4.2 2.8 6.4 7 7-4.2.6-6.4 2.8-7 7-.6-4.2-2.8-6.4-7-7 4.2-.6 6.4-2.8 7-7z"/><path d="M19 15v4M17 17h4"/></svg>`;
 
 const STATUS: Record<CopilotState, string> = {
   idle: "Copilot: ready",
