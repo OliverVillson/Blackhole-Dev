@@ -77,7 +77,7 @@ export class PlanPanel {
     const l = this.last;
     if (!l) {
       this.shell.panelNote.textContent = "";
-      this.body.append(h("div", { class: "empty" }, "Plan runs the recipe as a dry run: size, fit, KV cache and time, from headers only. Cmd+Shift+P."));
+      this.body.append(h("div", { class: "empty" }, "Plan runs the recipe as a dry run: size, fit, KV cache and time, from headers only. Cmd+Alt+P."));
       return;
     }
     this.shell.panelNote.textContent = `dry run · headers only, no weights read · ${(l.ms / 1000).toFixed(1)} s`;

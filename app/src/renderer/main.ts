@@ -1,5 +1,6 @@
 import "./fonts";
 import "./styles.css";
+import * as monaco from "monaco-editor";
 import { Shell } from "./shell";
 import { bh, helper } from "./bridge";
 import { ICONS, basename } from "./dom";
@@ -11,7 +12,7 @@ import { settingsView } from "./views/settings";
 import { PlanPanel, problemsPanel } from "./panels/plan";
 import { TerminalPanel, outputPanel } from "./panels/terminal";
 import { welcomeTab, overviewTab } from "./tabs";
-import { openPalette } from "./palette";
+import { openPalette, openSearch } from "./palette";
 import { rendererModules } from "../modules.renderer";
 import type { AppPaths } from "../shared/ext";
 import type { HelperStatus } from "../shared/rpc";
@@ -50,6 +51,8 @@ async function boot(): Promise<void> {
   // Commands (ids are what menus, keybindings and modules call).
   const cmd = (id: string, title: string, run: (...a: any[]) => unknown, keybinding?: string) => shell.registerCommand({ id, title, run, keybinding });
   cmd("palette.open", "Quick open", () => openPalette(shell));
+  cmd("palette.commands", "Show all commands", () => openPalette(shell, ">"));
+  cmd("search.workspace", "Find in files", () => openSearch(shell));
   cmd("recipe.new", "New recipe", () => newRecipe(shell).catch(report));
   cmd("function.new", "New function", () => newFunction(shell).catch(report));
   cmd("function.show", "Show function source", (name: string) => showFunction(shell, name).catch(report));
@@ -72,7 +75,45 @@ async function boot(): Promise<void> {
     const p = shell.activeFile();
     if (p) await shell.editor.save(p).catch(report);
   });
+  cmd("file.saveAll", "Save all", async () => {
+    for (const p of shell.openFiles()) if (shell.editor.isDirty(p)) await shell.editor.save(p).catch(report);
+  });
   cmd("tab.close", "Close tab", () => shell.closeActiveTab());
+  cmd("tab.reopen", "Reopen closed tab", () => shell.reopenClosed());
+  cmd("tab.next", "Next tab in group", () => shell.cycleTab(1));
+  cmd("tab.prev", "Previous tab in group", () => shell.cycleTab(-1));
+  cmd("tab.closeAll", "Close all tabs in group", () => [...shell.activeGroupRef.tabs].forEach((t) => shell.closeTab(t)));
+  cmd("group.next", "Next editor group", () => shell.cycleGroup(1));
+  cmd("group.prev", "Previous editor group", () => shell.cycleGroup(-1));
+  cmd("group.focus", "Focus editor group", (n: number) => shell.focusGroup(n));
+  cmd("view.splitRight", "Split editor right", () => shell.splitActive("right"));
+  cmd("view.splitDown", "Split editor down", () => shell.splitActive("down"));
+  cmd("group.collapse", "Collapse group into the previous one", () => shell.collapseGroup());
+  cmd("group.joinAll", "Join all editor groups", () => shell.joinAllGroups());
+  const monacoCmd = (id: string, title: string, action: string) => cmd(id, title, () => {
+    const ed = shell.editor.view()?.editor;
+    if (!ed?.getModel()) return toast("Open a file first.", "warn");
+    ed.focus();
+    ed.trigger("palette", action, null);
+  });
+  monacoCmd("editor.find", "Find", "actions.find");
+  monacoCmd("editor.replace", "Replace", "editor.action.startFindReplaceAction");
+  monacoCmd("editor.comment", "Toggle line comment", "editor.action.commentLine");
+  monacoCmd("editor.gotoLine", "Go to line", "editor.action.gotoLine");
+  monacoCmd("editor.symbol", "Go to symbol in file", "editor.action.quickOutline");
+  monacoCmd("editor.foldAll", "Fold all", "editor.foldAll");
+  monacoCmd("editor.unfoldAll", "Unfold all", "editor.unfoldAll");
+  monacoCmd("editor.selectAllMatches", "Select all occurrences", "editor.action.selectHighlights");
+  monacoCmd("editor.suggest", "Show completions", "editor.action.triggerSuggest");
+  const toggle = (opt: "wordWrap" | "minimap") => {
+    const ed = shell.editor.view()?.editor;
+    if (!ed) return;
+    const on = opt === "wordWrap" ? ed.getOption(monaco.editor.EditorOption.wordWrap) !== "off" : ed.getOption(monaco.editor.EditorOption.minimap).enabled;
+    for (const v of shell.editor.views) v.editor.updateOptions(opt === "wordWrap" ? { wordWrap: on ? "off" : "on" } : { minimap: { enabled: !on } });
+  };
+  cmd("editor.wordWrap", "Toggle word wrap", () => toggle("wordWrap"));
+  cmd("editor.minimap", "Toggle minimap", () => toggle("minimap"));
+  cmd("app.settings", "Settings", () => shell.showActivity("settings"));
   cmd("recipe.plan", "Plan (dry run)", () => plan.run().catch(report));
   cmd("recipe.lint", "Lint recipe", () => {
     const p = shell.activeFile();
@@ -93,12 +134,12 @@ async function boot(): Promise<void> {
       bh.invoke("app:reveal", r.bundle).catch(() => undefined);
     }
   });
-  cmd("view.sidebar", "Toggle sidebar", () => shell.toggleActivity("recipes"));
+  cmd("view.sidebar", "Toggle sidebar", () => shell.toggleSidebar());
   cmd("view.panel", "Toggle panel", () => shell.togglePanel());
-  cmd("view.inspector", "Toggle inspector", () => shell.toggleRight(), "Cmd+Alt+B");
+  cmd("view.inspector", "Toggle inspector", () => shell.toggleRight());
   cmd("panel.problems", "Show problems", () => shell.showPanel("problems"));
   cmd("helper.restart", "Restart Python helper", () => bh.invoke("helper:restart").catch(report));
-  cmd("terminal.new", "New terminal", () => terms.newShell(), "Ctrl+`");
+  cmd("terminal.new", "New terminal", () => terms.newShell());
   cmd("terminal.attach", "Attach terminal", (id: string, title: string) => terms.attach(id, title));
   cmd("terminal.focus", "Focus terminal", (id: string) => terms.focus(id));
   cmd("workbench.view", "Show a sidebar view", (activityId: string) => shell.showActivity(activityId));
@@ -107,6 +148,15 @@ async function boot(): Promise<void> {
   cmd("app.welcome", "Welcome and checks", () => shell.openTab("welcome", {}));
   cmd("app.logs", "Show logs", () => shell.showPanel("output"));
   cmd("recipes.overviewActive", "Overview of the active recipe", () => shell.executeCommand("recipe.overview"));
+
+  // Cursor position for the focused editor.
+  const pos = shell.registerStatusItem({ id: "cursor", side: "right", text: "", command: "editor.gotoLine", title: "Go to line" });
+  shell.editor.on("cursor", (v) => {
+    if (v !== shell.editor.view()) return;
+    const p = v.editor.getPosition();
+    const m = v.editor.getModel();
+    pos.update(p && m ? `Ln ${p.lineNumber}, Col ${p.column}   Spaces: 4   ${m.getLanguageId() === "python" ? "Python" : m.getLanguageId()}` : "");
+  });
 
   shell.showActivity("recipes");
   shell.openTab("welcome", {});

@@ -113,6 +113,13 @@ Interfaces: `/mnt/project-files/blackhole-dev-app/interfaces/ws1-shell.md` in th
   to `<userData>/confirm-log.jsonl`.
 - `licence.status()` is the paywall seam; it allows everything for now.
 
+## Editing
+
+- **Split view.** Drag a tab onto the bottom, right, left or top edge of an editor to split there; drop it in the middle, on a tab strip, or to the left of a tab to move it into that group. Any number of groups. Drag the divider between groups to resize them (double-click evens them out). The collapse button on a group's tab strip (Cmd+Alt+J) folds it into the group before it. Cmd+\\ splits the current file to the right as a second view of the same buffer, Cmd+Alt+\\ splits down.
+- **Moving around.** Shift+Tab or Ctrl+Tab: next tab in the group (Shift+Tab outdents instead when lines are selected). Cmd+Ctrl+Tab or Cmd+1 to Cmd+9: next group or group N. Cmd+Tab is also bound, but macOS keeps it for its app switcher.
+- **Tab autofill.** Tab after a word opens a small dropdown with the best match previewed inline; Tab or Enter takes it. Candidates: the recipe API, named functions from the helper (inside strings), Python keywords and words from open files.
+- **Shortcuts.** Cmd+P quick open, Cmd+Shift+P commands, Cmd+Shift+F find in files, Cmd+S / Cmd+Alt+S save / save all, Cmd+W close, Cmd+Shift+T reopen, Cmd+B sidebar, Cmd+J panel, Cmd+Alt+P plan, Cmd+R run on VM. The full list (and the editor's own keys) is in Settings > Keyboard shortcuts; the keymap lives in `src/renderer/shortcuts.ts`.
+
 ## Tests
 
 `npm test` runs unit tests (helper client against a fake helper, gate, secrets, workspace,
