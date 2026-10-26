@@ -1,6 +1,8 @@
 // WS6 local chat, main process side. The shell calls activate(ctx) at startup (src/modules.ts).
 import os from 'node:os';
+import path from 'node:path';
 import { downloadRepo } from './core/download';
+import { HistoryFiles } from './core/history';
 import { chat as defaultChat, type ChatFn } from './core/llm';
 import { readWiredLimit, realShell, setWiredLimit, type Shell } from './core/macos';
 import { scanModels } from './core/models';
@@ -38,7 +40,18 @@ export function activate(ctx: MainContext, deps: ChatDeps = {}) {
   const emit = (e: ChatEvent) => ctx.send(CHANNELS.event, e);
   server.on('state', (state) => emit({ type: 'server', state }));
   server.on('log', (line) => emit({ type: 'server-log', line }));
-  const session = new ChatSession(deps.chat ?? defaultChat, (turn, d) => emit({ type: 'delta', turn, ...d }));
+  // Each model has its own conversation, loaded from disk the first time it is asked for.
+  const files = new HistoryFiles(path.join(ctx.paths.userData, 'chat-history'));
+  const sessions = new Map<string, ChatSession>();
+  const sessionFor = (modelId: string) => {
+    let s = sessions.get(modelId);
+    if (!s) {
+      s = new ChatSession(deps.chat ?? defaultChat, (turn, d) => emit({ type: 'delta', modelId, turn, ...d }), files.load(modelId));
+      sessions.set(modelId, s);
+    }
+    return s;
+  };
+  const stopAll = () => sessions.forEach((s) => s.stop());
 
   const rescan = async () => {
     models = await scanModels([...new Set([...settings.modelDirs, settings.downloadDir])], settings.downloadDir);
@@ -89,11 +102,11 @@ export function activate(ctx: MainContext, deps: ChatDeps = {}) {
 
   ctx.handle(CHANNELS.start, async (id: string) => {
     if (!models.length) await rescan();
-    session.stop();
+    stopAll();
     return server.start(find(id), settings.server);
   });
   ctx.handle(CHANNELS.stop, () => {
-    session.stop();
+    stopAll();
     return server.stop();
   });
   ctx.handle(CHANNELS.state, () => server.state);
@@ -104,14 +117,31 @@ export function activate(ctx: MainContext, deps: ChatDeps = {}) {
 
   ctx.handle(CHANNELS.send, async (text: string) => {
     const st = server.state;
-    if (st.phase !== 'ready' || !st.baseUrl || !st.servedModel) throw new Error('start a model first');
-    const msg = await session.send(text, { baseUrl: st.baseUrl, model: st.servedModel }, settings.generation);
-    emit({ type: 'turn-end', turn: session.messages.length, message: msg });
-    return msg;
+    if (st.phase !== 'ready' || !st.baseUrl || !st.servedModel || !st.modelId) throw new Error('start a model first');
+    const modelId = st.modelId;
+    const session = sessionFor(modelId);
+    try {
+      const msg = await session.send(text, { baseUrl: st.baseUrl, model: st.servedModel }, settings.generation);
+      emit({ type: 'turn-end', modelId, turn: session.messages.length, message: msg });
+      return msg;
+    } finally {
+      persist(modelId);
+    }
   });
-  ctx.handle(CHANNELS.abort, () => session.stop());
-  ctx.handle(CHANNELS.history, () => session.messages);
-  ctx.handle(CHANNELS.clear, () => session.clear());
+  const persist = (modelId: string) => {
+    try {
+      files.save(modelId, sessionFor(modelId).messages);
+    } catch (e) {
+      ctx.log(`chat: could not save the history for ${modelId}: ${(e as Error).message}`);
+    }
+  };
+  ctx.handle(CHANNELS.abort, () => stopAll());
+  ctx.handle(CHANNELS.history, (modelId: string) => (modelId ? sessionFor(modelId).messages : []));
+  ctx.handle(CHANNELS.clear, (modelId: string) => {
+    if (!modelId) return;
+    sessionFor(modelId).clear();
+    persist(modelId);
+  });
 
   ctx.handle(CHANNELS.getSettings, () => settings);
   ctx.handle(CHANNELS.setSettings, (patch: DeepPartial<ChatSettings>) => {
@@ -124,7 +154,7 @@ export function activate(ctx: MainContext, deps: ChatDeps = {}) {
     /** The shell calls this on quit so the model server never outlives the app. */
     async deactivate() {
       for (const ac of downloads.values()) ac.abort();
-      session.stop();
+      stopAll();
       await server.stop();
     },
   };

@@ -57,7 +57,8 @@ export function renderChatTab(root: HTMLElement, store: ChatStore, tabState: Cha
   const col = h('div.bhc-col');
   scroll.append(col);
   const side = h('aside.bhc-side', { hidden: true });
-  const body = h('div.bhc-body', {}, scroll, side);
+  const jump = h('button.bhc-jump', { hidden: true, title: 'Follow the reply again' }, '↓ Latest');
+  const body = h('div.bhc-body', {}, h('div.bhc-pane', {}, scroll, jump), side);
 
   // ---- composer
   const input = h('textarea', { rows: 1, placeholder: 'Message the model. Enter sends, Shift+Enter adds a line.', 'aria-label': 'Message' });
@@ -70,16 +71,63 @@ export function renderChatTab(root: HTMLElement, store: ChatStore, tabState: Cha
 
   let selected = tabState.modelId ?? store.state.server.modelId;
   let liveEl: { box: HTMLElement; think?: HTMLDetailsElement; thinkBody?: HTMLElement; text: HTMLElement; stats: HTMLElement } | undefined;
-  let atBottom = true;
+  // ---- following the stream. While following, the view glides toward the newest line a fraction
+  // of the gap per frame instead of jumping a whole line per token. Any upward scroll by the user
+  // releases it; scrolling back to the bottom (or the Latest button) picks it up again.
+  let follow = true;
+  let glide = 0;
+  let lastTop = 0;
+  const gap = () => scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop;
+  const showJump = () => {
+    jump.hidden = follow || gap() < 40;
+  };
+  const step = () => {
+    glide = 0;
+    const d = gap();
+    if (!follow || d <= 0.5) return;
+    // Ease out: a quarter of the gap per frame, at least one pixel, so a burst of tokens is
+    // absorbed over a few frames and a slow stream just creeps along.
+    scroll.scrollTop += Math.max(1, Math.ceil(d * 0.25));
+    lastTop = scroll.scrollTop;
+    glide = requestAnimationFrame(step);
+  };
+  const stick = (instant = false) => {
+    if (!follow) return showJump();
+    if (instant) {
+      cancelAnimationFrame(glide);
+      glide = 0;
+      scroll.scrollTop = scroll.scrollHeight;
+      lastTop = scroll.scrollTop;
+    } else if (!glide) glide = requestAnimationFrame(step);
+  };
+  const release = () => {
+    follow = false;
+    cancelAnimationFrame(glide);
+    glide = 0;
+    showJump();
+  };
+  scroll.addEventListener('wheel', (e) => e.deltaY < 0 && release(), { passive: true });
+  scroll.addEventListener('keydown', (e) => ['ArrowUp', 'PageUp', 'Home'].includes(e.key) && release());
   scroll.addEventListener('scroll', () => {
-    atBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 40;
+    // Our own glide only ever moves down; moving up means the user dragged the scrollbar or swiped.
+    if (scroll.scrollTop < lastTop - 2 && gap() > 4) release();
+    else if (gap() < 4 && !follow) {
+      follow = true;
+      showJump();
+    }
+    lastTop = scroll.scrollTop;
+    if (!follow) showJump();
   });
-  const stick = () => {
-    if (atBottom) scroll.scrollTop = scroll.scrollHeight;
+  jump.onclick = () => {
+    follow = true;
+    jump.hidden = true;
+    stick();
   };
 
   const current = (): LocalModel | undefined => store.model(selected) ?? store.state.models[0];
   const serving = () => store.state.server.phase === 'ready' && store.state.server.modelId === current()?.id;
+  /** The reply being streamed, if it belongs to the model this tab shows. */
+  const mineLive = () => (store.state.live && store.state.live.modelId === current()?.id ? store.state.live : undefined);
 
   // ---- renderers
   const renderTop = () => {
@@ -98,7 +146,7 @@ export function renderChatTab(root: HTMLElement, store: ChatStore, tabState: Cha
     startBtn.className = `bhc-btn ${running ? '' : 'pri'}`;
     startBtn.disabled = !m || st.phase === 'stopping';
     meta.textContent = st.phase === 'ready' && st.baseUrl ? `${st.baseUrl} · OpenAI-compatible, also usable by the copilot` : m ? `${m.format.toUpperCase()} · ${m.arch ?? 'unknown arch'}${m.bits ? ` · ${m.bits}-bit` : ''}` : '';
-    sendBtn.disabled = !serving() && !store.state.live;
+    sendBtn.disabled = !serving() && !mineLive();
   };
 
   const renderBanners = () => {
@@ -136,11 +184,19 @@ export function renderChatTab(root: HTMLElement, store: ChatStore, tabState: Cha
     if (store.state.error) banners.append(h('div.bhc-banner.bad', {}, h('b', {}, store.state.error)));
   };
 
+  let shownModel: string | undefined;
   const renderMessages = () => {
+    const keep = scroll.scrollTop; // a reader scrolled up keeps their place across a re-render
     col.replaceChildren();
     liveEl = undefined;
-    const msgs = store.state.messages;
-    if (!msgs.length && !store.state.pending) {
+    const id = current()?.id;
+    const msgs = store.messages(id);
+    const pending = mineLive() && store.state.pending;
+    // Switching to another model's conversation lands at its end at once; growth glides.
+    const switched = shownModel !== id;
+    shownModel = id;
+    if (switched) follow = true;
+    if (!msgs.length && !pending) {
       const m = current();
       col.append(
         h(
@@ -158,8 +214,8 @@ export function renderChatTab(root: HTMLElement, store: ChatStore, tabState: Cha
       return;
     }
     for (const m of msgs) col.append(m.role === 'user' ? h('div.bhc-user', {}, m.content) : m.role === 'assistant' ? assistant(m) : '');
-    if (store.state.pending) {
-      col.append(h('div.bhc-user', {}, store.state.pending));
+    if (pending) {
+      col.append(h('div.bhc-user', {}, pending));
       const text = h('div');
       const stats = h('div.bhc-stats');
       const box = h('div.bhc-ai', {}, text, stats);
@@ -167,12 +223,13 @@ export function renderChatTab(root: HTMLElement, store: ChatStore, tabState: Cha
       liveEl = { box, text, stats };
       renderLive();
     }
-    stick();
+    if (!follow && !switched) scroll.scrollTop = lastTop = keep;
+    stick(switched);
   };
 
   let raf = 0;
   const renderLive = () => {
-    const lv = store.state.live;
+    const lv = mineLive();
     if (!lv || !liveEl) return;
     const { content, reasoning } = splitOrphanThink(lv.content, lv.reasoning);
     if (reasoning && !liveEl.think) {
@@ -200,11 +257,11 @@ export function renderChatTab(root: HTMLElement, store: ChatStore, tabState: Cha
   };
 
   const renderComposer = () => {
-    const busy = Boolean(store.state.live);
+    const busy = Boolean(mineLive());
     sendBtn.textContent = busy ? 'Stop' : 'Send';
     sendBtn.className = `bhc-btn ${busy ? '' : 'pri'}`;
-    sendBtn.disabled = !busy && !serving();
-    clearBtn.disabled = busy || !store.state.messages.length;
+    sendBtn.disabled = !busy && (!serving() || Boolean(store.state.live));
+    clearBtn.disabled = busy || !store.messages(current()?.id).length;
     if (!busy) live.textContent = '';
     input.placeholder = serving() ? 'Message the model. Enter sends, Shift+Enter adds a line.' : 'Start the model to chat.';
   };
@@ -305,16 +362,19 @@ export function renderChatTab(root: HTMLElement, store: ChatStore, tabState: Cha
     void store.refreshWired();
   };
   const submit = () => {
-    if (store.state.live) return void store.abort();
+    if (mineLive()) return void store.abort();
     const t = input.value;
-    if (!t.trim() || !serving()) return;
+    if (!t.trim() || !serving() || store.state.live) return;
     input.value = '';
     input.style.height = '';
-    atBottom = true;
+    follow = true;
     void store.send(t);
   };
   sendBtn.onclick = submit;
-  clearBtn.onclick = () => void store.clear();
+  clearBtn.onclick = () => {
+    const id = current()?.id;
+    if (id) void store.clear(id);
+  };
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
@@ -327,8 +387,16 @@ export function renderChatTab(root: HTMLElement, store: ChatStore, tabState: Cha
   });
   // A thinking block the user opened or closed by hand is left alone when the answer starts.
   col.addEventListener('click', (e) => {
-    const d = (e.target as HTMLElement).closest('summary')?.parentElement;
+    const t = e.target as HTMLElement;
+    const d = t.closest('summary')?.parentElement;
     if (d) d.dataset.touched = '1';
+    const copy = t.closest<HTMLButtonElement>('.bhc-copy');
+    const code = copy?.closest('.bhc-code')?.querySelector('pre')?.textContent;
+    if (copy && code != null)
+      void navigator.clipboard?.writeText(code).then(() => {
+        copy.textContent = 'Copied';
+        setTimeout(() => (copy.textContent = 'Copy'), 1200);
+      });
   });
 
   const renderAll = () => {
@@ -346,7 +414,7 @@ export function renderChatTab(root: HTMLElement, store: ChatStore, tabState: Cha
     }
     if (parts.has('server') || parts.has('models')) renderTop();
     if (parts.has('server') || parts.has('wired') || parts.has('error') || parts.has('models') || parts.has('settings')) renderBanners();
-    if (parts.has('messages') || (parts.has('live') && !liveEl)) renderMessages();
+    if (parts.has('messages') || (parts.has('live') && !liveEl && mineLive())) renderMessages();
     if (parts.has('messages') || parts.has('live') || parts.has('server')) renderComposer();
     if ((parts.has('logs') && sideMode === 'log') || (parts.has('settings') && sideMode === 'settings') || (parts.has('server') && sideMode === 'log')) renderSide();
   });
@@ -357,6 +425,7 @@ export function renderChatTab(root: HTMLElement, store: ChatStore, tabState: Cha
   });
   return () => {
     cancelAnimationFrame(raf);
+    cancelAnimationFrame(glide);
     unsub();
   };
 }

@@ -4,6 +4,8 @@ Chat with a model on this Mac once it is downloaded or copied back from a pipeli
 
 - `main.ts` `activate(ctx)`: model discovery, `mlx_lm.server` lifecycle, gated downloads, chat session. Channels are listed in `shared/types.ts` (`CHANNELS`), all prefixed `chat:`. Returns `{ deactivate }`, which the shell calls on quit so the server never outlives the app.
 - `renderer.ts` `activate(ctx)`: activity "Local chat", sidebar view "Local models", tab type `chat` (`openTab('chat', { modelId })`), commands `chat.open` / `chat.stopServer`, status item.
+- Each model has its own conversation. `chat:history(modelId)` / `chat:clear(modelId)`; `chat:send` goes to the served model's conversation, and stream events carry `modelId`. Saved after every turn to `<userData>/chat-history/<sha1 of model id>.json` (`core/history.ts`), so they survive a restart.
+- Replies: `ui/highlight.ts` colours code blocks (keywords, strings, comments, calls, literals, types) per language family; each block has a language label and Copy button. While streaming the view glides toward the newest line; scrolling up releases it and shows "↓ Latest".
 - LLM calls go through the shared I5 layer in `src/llm` (WS4), provider `openai-compatible`.
 
 ## Server
@@ -25,4 +27,4 @@ Scanned two folders deep in `ctx.paths.models`, `~/flint`, `~/keep`, `~/.blackho
 
 ## Tests
 
-`npx vitest run test/chat` (31 tests). `app/test/chat/fake-mlx-server.mjs` stands in for mlx_lm.server (same flags, SSE, OOM crash). `app/test/chat/preview/` renders the panel in a stand-in shell frame for screenshots.
+`npx vitest run test/chat` (35 tests). `app/test/chat/fake-mlx-server.mjs` stands in for mlx_lm.server (same flags, SSE, OOM crash). `app/test/chat/preview/` renders the panel in a stand-in shell frame for screenshots.

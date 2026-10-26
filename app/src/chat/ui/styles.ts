@@ -6,6 +6,8 @@ export const CSS = `
 --c-dim:var(--dim,#a2735b);--c-bg1:var(--bg1,#060201);--c-bg2:var(--bg2,#0c0402);--c-line:var(--line,#1e0804);--c-line2:var(--line2,#2b0d05);
 --c-sel:var(--sel,#2a0c04);--f-display:var(--font-display,'Chakra Petch',sans-serif);--f-ui:var(--font-ui,'IBM Plex Sans',system-ui,sans-serif);
 --f-mono:var(--font-mono,'JetBrains Mono',monospace);color:var(--c-text);font-family:var(--f-ui);font-size:13px;box-sizing:border-box}
+.bhc ::selection{background:var(--c-ember);color:#000}
+.bhc pre ::selection,.bhc code::selection{background:var(--c-flare);color:#000}
 .bhc *,.bhc *::before,.bhc *::after{box-sizing:inherit}
 .bhc-tab{display:flex;flex-direction:column;height:100%;min-height:0;background:var(--c-void)}
 .bhc-hd{font-family:var(--f-display);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--c-dim)}
@@ -32,7 +34,12 @@ export const CSS = `
 .bhc-banner .bhc-sub{color:var(--c-dim);font-size:12px}
 .bhc-banner .bhc-acts{margin-left:auto;display:flex;gap:8px}
 .bhc-body{flex:1;min-height:0;display:flex}
-.bhc-scroll{flex:1;min-width:0;overflow-y:auto;padding:20px 0 12px}
+.bhc-pane{flex:1;min-width:0;position:relative;display:flex}
+.bhc-scroll{flex:1;min-width:0;overflow-y:auto;padding:20px 0 12px;overflow-anchor:none}
+.bhc-jump{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);height:28px;padding:0 14px;border-radius:14px;border:1px solid var(--c-ember);background:#140602;color:var(--c-flare);font:600 12px var(--f-ui);cursor:pointer;box-shadow:0 0 0 4px rgba(0,0,0,.6),0 0 18px rgba(255,106,0,.25);animation:bhc-rise .16s ease-out}
+.bhc-jump:hover{background:var(--c-ember);color:#000}
+.bhc-jump[hidden]{display:none}
+@keyframes bhc-rise{from{opacity:0;transform:translate(-50%,6px)}}
 .bhc-col{max-width:820px;margin:0 auto;padding:0 20px;display:flex;flex-direction:column;gap:16px}
 .bhc-empty{margin:12vh auto 0;max-width:460px;text-align:center;color:var(--c-dim);line-height:20px}
 .bhc-hole{display:flex;justify-content:center;line-height:0;margin:0 0 18px}
@@ -42,10 +49,26 @@ export const CSS = `
 .bhc-ai p{margin:0 0 10px}.bhc-ai p:last-child{margin-bottom:0}
 .bhc-ai h3,.bhc-ai h4,.bhc-ai h5,.bhc-ai h6{font-family:var(--f-display);color:var(--c-photon);margin:14px 0 6px;letter-spacing:.03em}
 .bhc-ai ul,.bhc-ai ol{margin:0 0 10px;padding-left:22px}
-.bhc-ai code{font-family:var(--f-mono);font-size:12px;background:#1a0703;border:1px solid var(--c-line2);border-radius:3px;padding:0 4px;color:var(--c-flare)}
-.bhc-ai pre{background:var(--c-bg1);border:1px solid var(--c-line2);border-radius:6px;padding:10px 12px;overflow-x:auto;margin:0 0 10px}
-.bhc-ai pre code{background:none;border:0;padding:0;color:var(--c-text);font-size:12.5px;line-height:19px}
+.bhc-ai strong{color:var(--c-photon);font-weight:700}
+.bhc-ai em{color:var(--c-flare)}
+.bhc-ai code{font-family:var(--f-mono);font-size:12px;background:#2a0c04;border:1px solid #5a1a08;border-radius:3px;padding:1px 5px;color:#ffc46b}
+.bhc-code{margin:0 0 12px;border:1px solid #3a1206;border-left:3px solid var(--c-ember);border-radius:6px;background:#030100;overflow:hidden;box-shadow:0 0 24px rgba(255,106,0,.06)}
+.bhc-code-hd{display:flex;align-items:center;justify-content:space-between;height:26px;padding:0 6px 0 12px;background:#120502;border-bottom:1px solid #2b0d05;font:600 10.5px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c-ember)}
+.bhc-copy{height:20px;padding:0 8px;border:1px solid transparent;border-radius:3px;background:none;color:var(--c-dim);font:500 11px var(--f-ui);letter-spacing:0;text-transform:none;cursor:pointer}
+.bhc-copy:hover{border-color:var(--c-ash);color:var(--c-photon)}
+.bhc-ai pre{background:none;border:0;border-radius:0;padding:10px 14px;overflow-x:auto;margin:0}
+.bhc-ai pre code{background:none;border:0;padding:0;color:#f3e3d3;font-size:12.5px;line-height:19px}
 .bhc-ai a{color:var(--c-flare)}
+.t-kw{color:#ff7a1a;font-weight:600}
+.t-str{color:#ffd27a}
+.t-key{color:#ffb070}
+.t-num,.t-lit{color:#ff5a45}
+.t-lit{font-weight:600}
+.t-com{color:#8a5e48;font-style:italic}
+.t-fn{color:#fff6ea;font-weight:600}
+.t-type{color:#ffae42}
+.t-deco{color:#ff9a3c}
+.t-op{color:#e2452f}
 .bhc-think{border:1px solid var(--c-line2);border-radius:6px;background:var(--c-bg1);margin-bottom:10px}
 .bhc-think summary{cursor:pointer;padding:6px 10px;font-size:12px;color:var(--c-dim);list-style:none;display:flex;gap:8px;align-items:center}
 .bhc-think summary::-webkit-details-marker{display:none}

@@ -13,7 +13,8 @@ export function fakeApi(opts: { tokenMs?: number; reply?: string; think?: string
   const emit = (e: ChatEvent) => subs.forEach((f) => f(e));
   let state: ServerState = { phase: 'stopped' };
   let settings: ChatSettings = DEFAULT_SETTINGS('/Users/me');
-  const history: ChatMessage[] = [];
+  const histories = new Map<string, ChatMessage[]>();
+  const historyOf = (id: string) => histories.get(id) ?? (histories.set(id, []), histories.get(id)!);
   let aborted = false;
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const api: ChatApi & { emit(e: ChatEvent): void } = {
@@ -37,6 +38,8 @@ export function fakeApi(opts: { tokenMs?: number; reply?: string; think?: string
     setWired: async (mb) => ({ supported: true, currentMb: mb, recommendedMb: 12288, totalMb: 16384, ok: true }),
     send: async (text) => {
       aborted = false;
+      const modelId = state.modelId!;
+      const history = historyOf(modelId);
       history.push({ role: 'user', content: text });
       const think = (opts.think ?? 'The user wants a quick check. Keep it short.').split(/(?<=\s)/);
       const reply = (opts.reply ?? 'Here you go:\n\n```python\nprint("hello from a 9.8 GB model")\n```').split(/(?<=\s)/);
@@ -45,12 +48,12 @@ export function fakeApi(opts: { tokenMs?: number; reply?: string; think?: string
       for (const t of think) {
         if (aborted) break;
         tFirst ||= Date.now();
-        emit({ type: 'delta', turn: 1, reasoning: t });
+        emit({ type: 'delta', modelId, turn: 1, reasoning: t });
         await sleep(opts.tokenMs ?? 1);
       }
       for (const t of reply) {
         if (aborted) break;
-        emit({ type: 'delta', turn: 1, text: t });
+        emit({ type: 'delta', modelId, turn: 1, text: t });
         await sleep(opts.tokenMs ?? 1);
       }
       const n = think.length + reply.length;
@@ -68,9 +71,9 @@ export function fakeApi(opts: { tokenMs?: number; reply?: string; think?: string
     abort: async () => {
       aborted = true;
     },
-    history: async () => [...history],
-    clear: async () => {
-      history.length = 0;
+    history: async (id) => [...historyOf(id)],
+    clear: async (id) => {
+      histories.delete(id);
     },
     getSettings: async () => settings,
     setSettings: async (p) => (settings = { ...settings, ...(p as any) }),

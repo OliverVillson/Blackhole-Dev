@@ -19,7 +19,10 @@ export class ChatSession {
   constructor(
     private chat: ChatFn,
     private onDelta: (turn: number, d: { text?: string; reasoning?: string }) => void = () => {},
-  ) {}
+    saved: ChatMessage[] = [],
+  ) {
+    this.messages.push(...saved);
+  }
 
   get busy(): boolean {
     return Boolean(this.abort);
