@@ -15,6 +15,10 @@ dev = ["pytest>=8"]
 [project.entry-points."blackhole.ops"]
 blackhole_dev = "blackhole_dev.op"
 
+# The free pipeline runs a recipe's job.fn stages (forkable pipeline stages) through this module.
+[project.entry-points."blackhole.jobfn"]
+blackhole_dev = "blackhole_dev.jobctx"
+
 [tool.setuptools.packages.find]
 include = ["blackhole_dev*"]
 
