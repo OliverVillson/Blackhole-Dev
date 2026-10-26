@@ -23,8 +23,8 @@ export function activate(ctx: RendererContext): void {
     invoke: (channel, payload) => ctx.invoke(channel, payload),
     readFile: (path) => ctx.workspace.readFile(path),
     listFiles: () => ctx.workspace.listRecipes(),
-    openFile: async (path) => {
-      await ctx.workspace.open(path);
+    openFile: async (path, opts) => {
+      await ctx.workspace.open(path, undefined, opts);
     },
   });
 

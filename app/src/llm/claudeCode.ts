@@ -176,7 +176,7 @@ export function buildArgs(o: { model?: string; effort?: string; system?: string;
   return args;
 }
 
-export const TOOL_NOTE = `\n\n# Tool names here\n\nYour tools come from an MCP server named ${MCP_SERVER}: read_file is mcp__${MCP_SERVER}__read_file, and so on. You have no other tools.`;
+export const TOOL_NOTE = `\n\n# Tool names here\n\nYour tools come from an MCP server named ${MCP_SERVER}: read_file is mcp__${MCP_SERVER}__read_file, and so on. You have no other tools.\n\nHere you work in a tool loop: write files with the write_file tool (it types into the user's editor) and change them with edit_file, so they are in the editor before you lint, plan or read them. Do not use path= fences.`;
 
 // ---- stream-json → LlmChunk ----
 

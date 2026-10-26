@@ -61,8 +61,8 @@ export interface CopilotHost {
   readFile?(path: string): Promise<string>;
   /** Recipe files in the workspace (list_files tool). */
   listFiles?(): Promise<string[]>;
-  /** Open a file in the editor; I3 only works on open buffers. */
-  openFile?(path: string): Promise<void>;
+  /** Open a file in the editor; I3 only works on open buffers. create: the file is new, open an empty tab for it. */
+  openFile?(path: string, opts?: { create?: boolean }): Promise<void>;
   /** Timer for the pacer. Tests pass a manual one. */
   every?(ms: number, fn: () => void): () => void;
   pacer?: PacerOptions;
@@ -445,7 +445,12 @@ export class CopilotSession {
     } catch {
       disk = null;
     }
-    if (disk !== null && this.host.openFile) await this.host.openFile(file);
+    // A new file gets an empty tab too, so the user sees it being written.
+    try {
+      await this.host.openFile?.(file, disk === null ? { create: true } : undefined);
+    } catch {
+      /* the stream still opens a buffer for it */
+    }
     return disk;
   }
 
@@ -485,7 +490,7 @@ export class CopilotSession {
           : (await this.runTools([{ id: c.callId, name: c.name, input: c.input }]))[0];
         if (this.running && this._state === "tools") this.setState(this.paused ? "paused" : "thinking");
       } catch (err) {
-        out = { type: "tool_result", tool_use_id: c.callId, content: String(err), is_error: true };
+        out = { type: "tool_result", tool_use_id: c.callId, content: cleanError(err), is_error: true };
       }
       const r = out as Extract<LlmBlock, { type: "tool_result" }>;
       this.host.toolResult?.(c.callId, { content: r.content, isError: r.is_error });
@@ -508,8 +513,8 @@ export class CopilotSession {
           this.emit({ type: "tool", id: c.id, name: c.name, status: "ok", summary: out.summary });
           return { type: "tool_result", tool_use_id: c.id, content: out.content };
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          this.emit({ type: "tool", id: c.id, name: c.name, status: "error", summary: msg });
+          const msg = cleanError(err);
+          this.emit({ type: "tool", id: c.id, name: c.name, status: "error", summary: `${c.name.replace(/_/g, " ")}: ${msg}` });
           return { type: "tool_result", tool_use_id: c.id, content: msg, is_error: true };
         }
       }),
@@ -526,6 +531,31 @@ export class CopilotSession {
       case "list_files": {
         const files = this.host.listFiles ? await this.host.listFiles() : [];
         return { content: files.length ? files.join("\n") : "No recipe files yet.", summary: `listed ${files.length} recipe file(s)` };
+      }
+      case "write_file": {
+        const mode: FenceInfo["mode"] = input.mode ?? "new";
+        const text: string = input.content.endsWith("\n") || !input.content ? input.content : input.content + "\n";
+        const p = this.openPacer({ lang: langOf(input.path), path: input.path, mode, modeSet: true });
+        p.push(text);
+        this.emit({ type: "code", file: p.file, text });
+        await p.finish();
+        this.pacers = this.pacers.filter((x) => x !== p);
+        this.trackAnchor(p.file);
+        const typed = text.slice(0, p.charsTyped);
+        const lines = typed.split("\n").length - (typed.endsWith("\n") ? 1 : 0);
+        const stopped = p.charsTyped < text.length;
+        this.emit({ type: "write", file: p.file, mode, status: stopped ? "stopped" : "done" });
+        this.setState("tools");
+        if (stopped) {
+          return {
+            content: `Interrupted after ${lines} line(s) of ${p.file}: the user stopped or steered you. What was typed stays; continue with mode=append if asked to.`,
+            summary: `stopped writing ${p.file} · ${lines} lines`,
+          };
+        }
+        return {
+          content: `Wrote ${lines} line(s) to ${p.file}. They are in the editor as pending changes the user can accept or reject; read_file, lint_recipe and plan_recipe see them now.`,
+          summary: `wrote ${p.file} · ${lines} lines`,
+        };
       }
       case "edit_file": {
         await this.ensureOpen(input.path);
@@ -558,9 +588,14 @@ export class CopilotSession {
         if (!method) throw new Error(`No handler for ${name}`);
         const params: Record<string, unknown> = { ...input };
         // Lint and plan read the live buffer, so they see what is streaming before it is saved.
+        // A file that is not open is read from disk: asking the editor for it would make an
+        // empty buffer that hides the file on disk.
         if ((name === "lint_recipe" || name === "plan_recipe") && typeof input.path === "string") {
-          const t = this.safeText(input.path);
-          if (t !== null) params.text = t;
+          try {
+            params.text = await this.readAny(input.path);
+          } catch {
+            /* not open and not on disk: the helper says so */
+          }
         }
         const out = await this.host.helper(method, params);
         return { content: JSON.stringify(out), summary: summarizeResult(name, out) };
@@ -569,12 +604,26 @@ export class CopilotSession {
   }
 }
 
+/** Errors from the helper arrive wrapped by Electron's IPC ("Error invoking remote method
+ *  'bh:invoke': Error: ..."); the model and the panel only need the message itself. */
+export function cleanError(err: unknown): string {
+  let msg = err instanceof Error ? err.message : String(err);
+  msg = msg.replace(/^(?:Error: )?Error invoking remote method '[^']*':\s*/, "");
+  return msg.replace(/^(?:[A-Za-z]*Error: )+/, "").trim() || "failed with no message";
+}
+
+function langOf(path: string): string {
+  return path.endsWith(".py") ? "python" : path.endsWith(".toml") ? "toml" : path.endsWith(".json") ? "json" : "";
+}
+
 function describeCall(name: string, input: any): string {
   switch (name) {
     case "plan_recipe":
       return `planning ${input.path} for ${input.device}`;
     case "lint_recipe":
       return `linting ${input.path}`;
+    case "write_file":
+      return `writing ${input.path}`;
     case "open_model":
       return `reading anatomy of ${input.model}`;
     case "request_action":
@@ -588,8 +637,11 @@ function summarizeResult(name: string, out: any): string {
   try {
     if (name === "lint_recipe") {
       const ps = out?.problems ?? [];
-      const errs = ps.filter((p: any) => p.severity === "error").length;
-      return ps.length ? `lint: ${errs} error(s), ${ps.length - errs} warning(s)` : "lint: clean";
+      const errs = ps.filter((p: any) => p.severity === "error");
+      if (!ps.length) return "lint: clean";
+      const first = errs[0] ?? ps[0];
+      const where = first?.line ? `line ${first.line}: ` : "";
+      return `lint: ${errs.length} error(s), ${ps.length - errs.length} warning(s) · ${where}${String(first?.message ?? "").slice(0, 120)}`;
     }
     if (name === "plan_recipe") {
       const size = out?.sizeGb == null ? "size unknown" : `~${Number(out.sizeGb).toFixed(1)} GB`;

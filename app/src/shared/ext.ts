@@ -132,7 +132,8 @@ export interface TerminalApi {
 export interface WorkspaceApi {
   activeFile(): string | null;
   onActiveFile(cb: (path: string | null) => void): Dispose;
-  open(path: string, line?: number): Promise<void>;
+  /** create: a path not on disk opens as a new, empty, unsaved file instead of failing. */
+  open(path: string, line?: number, opts?: { create?: boolean }): Promise<void>;
   listRecipes(): Promise<string[]>;
   readFile(path: string): Promise<string>;
   paths(): Promise<AppPaths>;

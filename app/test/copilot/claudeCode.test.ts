@@ -254,4 +254,63 @@ describe("CopilotSession with in-turn tool calls", () => {
     expect(events.some((e) => e.type === "tool" && e.status === "ok" && e.summary === "lint: clean")).toBe(true);
     expect(session.messages.at(-1)).toMatchObject({ role: "assistant", raw: { provider: "claude-code" } });
   });
+
+  it("writes a recipe through write_file with the fake Claude Code CLI, so lint and read see it", async () => {
+    const ed = new FakeEditor();
+    const helperCalls: [string, any][] = [];
+    let tick: (() => void) | null = null;
+    const timer = setInterval(() => { for (let i = 0; i < 50; i++) tick?.(); }, 1);
+    // Same shape as copilot/main.ts + transport.ts: the provider's runTool becomes a tool_run
+    // chunk in the turn, and the session answers it with toolResult.
+    const waiting = new Map<string, (r: { content: string; isError?: boolean }) => void>();
+    let n = 0;
+    const session = new CopilotSession({
+      editor: ed,
+      activeFile: () => null,
+      async *turn(req): AsyncIterable<TurnChunk> {
+        const queue: TurnChunk[] = [];
+        let wake: (() => void) | null = null;
+        const push = (c: TurnChunk) => { queue.push(c); wake?.(); };
+        const runTool = (name: string, input: unknown) =>
+          new Promise<{ content: string; isError?: boolean }>((resolve) => {
+            const callId = `c${n++}`;
+            waiting.set(callId, resolve);
+            push({ type: "tool_run", callId, name, input });
+          });
+        void (async () => {
+          for await (const c of chat({ provider: "claude-code", model: "default", system: req.system, messages: req.messages, tools: req.tools, runTool, cwd: tmp })) push(c);
+        })();
+        for (;;) {
+          while (!queue.length) await new Promise<void>((r) => (wake = r));
+          const c = queue.shift()!;
+          yield c;
+          if (c.type === "done" || c.type === "error") return;
+        }
+      },
+      abortTurn: () => {},
+      toolResult: (id, r) => waiting.get(id)?.(r),
+      helper: async (method, params) => {
+        helperCalls.push([method, params]);
+        return { problems: [] };
+      },
+      invoke: async () => ({}),
+      every: (_ms, fn) => {
+        tick = fn;
+        return () => (tick = null);
+      },
+      pacer: { lookaheadLines: 1, charsPerTick: 4 },
+    });
+    const events: CopilotEvent[] = [];
+    session.on((e) => events.push(e));
+    await session.ask('write a script for int4 quant called "int4.py"');
+    clearInterval(timer);
+    expect(events.filter((e) => e.type === "error")).toEqual([]);
+    const text = ed.getText("recipes/int4.py");
+    expect(text).toContain('recipe = Recipe("me/int4"');
+    expect(helperCalls[0]).toEqual(["recipe.lint", { path: "recipes/int4.py", text }]);
+    const reply = events.filter((e) => e.type === "prose").map((e: any) => e.text).join("");
+    expect(reply).toContain("write: Wrote 4 line(s) to recipes/int4.py");
+    expect(reply).toContain("read: 5 lines");
+    expect(runs()[0].argv[runs()[0].argv.indexOf("--system-prompt") + 1]).toContain("write files with the write_file tool");
+  });
 });

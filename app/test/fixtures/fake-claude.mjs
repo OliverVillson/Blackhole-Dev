@@ -58,6 +58,21 @@ if (stdin.includes("slow")) {
 await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "fake", version: "0" } });
 const list = await rpc("tools/list", {});
 
+if (stdin.includes("int4")) {
+  // What real Claude Code does: no text between tool calls, the file goes through write_file.
+  const content = 'from blackhole_dev.recipe import Recipe\n\nrecipe = Recipe("me/int4", "0.1.0", base="Qwen/Qwen3-30B-A3B")\nrecipe.step("pipeline.gptq")\n';
+  out({ type: "stream_event", event: { type: "message_start", message: {} }, ...sessionEv });
+  const w = await rpc("tools/call", { name: "write_file", arguments: { path: "recipes/int4.py", content } });
+  out({ type: "stream_event", event: { type: "message_start", message: {} }, ...sessionEv });
+  const lint = await rpc("tools/call", { name: "lint_recipe", arguments: { path: "recipes/int4.py" } });
+  out({ type: "stream_event", event: { type: "message_start", message: {} }, ...sessionEv });
+  const read = await rpc("tools/call", { name: "read_file", arguments: { path: "recipes/int4.py" } });
+  out({ type: "stream_event", event: { type: "message_start", message: {} }, ...sessionEv });
+  delta(`write: ${w.content[0].text}\nlint: ${lint.content[0].text}\nread: ${read.content[0].text.split("\n").length} lines`);
+  result();
+  process.exit(0);
+}
+
 out({ type: "stream_event", event: { type: "message_start", message: {} }, ...sessionEv });
 out({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "Plan." } }, ...sessionEv });
 delta(`I have ${list.tools.length} tools. Writing it.\n\n\`\`\`python path=recipes/r.py mode=new\nrecipe = 1\n\`\`\`\nLinting`);
