@@ -2,7 +2,7 @@
 
 The BlackHole **dev training harness**: the developer API for manipulating a model's structure
 and weights, and for packaging those manipulations as named functions that BlackHole schemas
-call. It is the paid companion of the free
+call. It is the companion of the
 [BlackHole-Harness](https://github.com/OliverVillson/BlackHole-Harness) pipeline, which it
 installs on top of (`pip install -e ../BlackHole-Harness -e .`).
 
@@ -30,4 +30,4 @@ the same HEX layout this package writes.
 | `schemas/reapq-hex.toml` | the REAP/Q-HEX recipe written as `model.edit` stages |
 | `tests/` | numpy half on hand-written checkpoints, torch half on tiny real models; test_functions (override rule, fork, every stage and knob reachable), test_jobfns (a recipe of job functions runs the pipeline on a tiny model) |
 
-Licence: to be set (Elastic License 2.0 with a licence key) before release; all rights reserved until then.
+Licence: Apache-2.0, see [LICENSE](LICENSE).

@@ -5,7 +5,7 @@
   "private": true,
   "description": "BlackHole-Dev desktop app: write Python recipes, plan them, run them on your VM.",
   "author": "BlackHole-Harness",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
