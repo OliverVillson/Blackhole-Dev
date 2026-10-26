@@ -2,6 +2,8 @@
 // italics, headings, lists and links. Everything is escaped first, so model output can never
 // inject markup.
 
+import { highlight } from './highlight';
+
 export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }
@@ -37,7 +39,8 @@ export function renderMarkdown(src: string): string {
       for (i++; i < lines.length && !/^\s*```\s*$/.test(lines[i]); i++) code.push(lines[i]);
       const lang = fence[1] ? ` data-lang="${escapeHtml(fence[1])}"` : '';
       // An unclosed fence while streaming still renders as code.
-      out.push(`<pre${lang}><code>${escapeHtml(code.join('\n'))}</code></pre>`);
+      const hd = `<div class="bhc-code-hd"><span>${escapeHtml(fence[1] || 'code')}</span><button class="bhc-copy" type="button">Copy</button></div>`;
+      out.push(`<div class="bhc-code">${hd}<pre${lang}><code>${highlight(code.join('\n'), fence[1])}</code></pre></div>`);
       continue;
     }
     const h = line.match(/^(#{1,4})\s+(.*)/);

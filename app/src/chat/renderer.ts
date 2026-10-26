@@ -29,7 +29,7 @@ export function activate(ctx: RendererContext): void {
     if (!parts.has('server') && !parts.has('messages')) return;
     const st = store.state.server;
     const name = store.model(st.modelId)?.name ?? '';
-    const last = [...store.state.messages].reverse().find((m) => m.stats);
+    const last = [...store.messages(st.modelId)].reverse().find((m) => m.stats);
     if (last?.stats) lastRate = formatStats(last.stats).split(' · ')[0];
     const text =
       st.phase === 'ready' ? `Local: ${name}${lastRate ? ` · ${lastRate}` : ''}` : st.phase === 'starting' ? `Local: loading ${name}…` : st.phase === 'crashed' ? 'Local: error' : 'Local: off';

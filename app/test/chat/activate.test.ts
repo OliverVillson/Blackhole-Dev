@@ -5,7 +5,7 @@ import type { ConfirmRequest, MainContext } from '../../src/chat/shared/ext-shim
 import { CHANNELS, type ChatEvent } from '../../src/chat/shared/types';
 import { fakeServer, mlxFolder, settings, tmp } from './helpers';
 
-function fakeCtx(models: string) {
+function fakeCtx(models: string, userData = tmp()) {
   const handlers = new Map<string, (...a: any[]) => any>();
   const events: ChatEvent[] = [];
   const store: Record<string, unknown> = {};
@@ -15,7 +15,7 @@ function fakeCtx(models: string) {
     send: (ch, p) => ch === CHANNELS.event && events.push(p as ChatEvent),
     gate: { confirm: async (r) => (asked.push(r), false) },
     settings: { get: (k, f) => (store[k] as any) ?? f, set: (k, v) => (store[k] = v) },
-    paths: { userData: tmp(), workspace: tmp(), recipes: '', functions: '', models },
+    paths: { userData, workspace: tmp(), recipes: '', functions: '', models },
     log: () => {},
   };
   const ctx = { module: 'chat', ...part } as unknown as MainContext;
@@ -55,10 +55,43 @@ describe('activate (main)', () => {
     expect(reply.content).toBe('The answer is **42**.');
     expect(f.events.some((e) => e.type === 'delta')).toBe(true);
     expect(f.events.some((e) => e.type === 'turn-end')).toBe(true);
-    expect((await f.call(CHANNELS.history)).length).toBe(2);
+    expect((await f.call(CHANNELS.history, list[0].id)).length).toBe(2);
 
     expect((await f.call(CHANNELS.stop)).phase).toBe('stopped');
     await expect(f.call(CHANNELS.send, 'x')).rejects.toThrow(/start a model first/);
+  });
+  it('keeps a separate conversation per model and restores it after a restart', async () => {
+    const models = tmp();
+    mlxFolder(path.join(models, 'model-a'));
+    mlxFolder(path.join(models, 'model-b'));
+    const userData = tmp();
+    const f = fakeCtx(models, userData);
+    const mod = activate(f.ctx, { server: fakeServer() });
+    stop = mod.deactivate;
+    await f.call(CHANNELS.setSettings, { server: { port: settings().port }, modelDirs: [models] });
+    const [a, b] = (await f.call(CHANNELS.rescan)).map((m: any) => m.id).sort();
+
+    await f.call(CHANNELS.start, a);
+    await f.call(CHANNELS.send, 'to a');
+    expect(f.events.filter((e) => e.type === 'delta').every((e) => (e as any).modelId === a)).toBe(true);
+    await f.call(CHANNELS.start, b);
+    await f.call(CHANNELS.send, 'to b, first');
+    await f.call(CHANNELS.send, 'to b, second');
+    expect((await f.call(CHANNELS.history, a)).map((m: any) => m.content)[0]).toBe('to a');
+    expect((await f.call(CHANNELS.history, a)).length).toBe(2);
+    expect((await f.call(CHANNELS.history, b)).length).toBe(4);
+    await mod.deactivate();
+
+    // A fresh start reads both conversations back from disk.
+    const g = fakeCtx(models, userData);
+    stop = activate(g.ctx, { server: fakeServer() }).deactivate;
+    expect((await g.call(CHANNELS.history, a)).length).toBe(2);
+    expect((await g.call(CHANNELS.history, b)).map((m: any) => m.content)[2]).toBe('to b, second');
+    await g.call(CHANNELS.clear, b);
+    const h = fakeCtx(models, userData);
+    activate(h.ctx, { server: fakeServer() });
+    expect(await h.call(CHANNELS.history, b)).toEqual([]);
+    expect((await h.call(CHANNELS.history, a)).length).toBe(2);
   });
   it('accepts the copilot request_action shape on chat:download and goes through the gate', async () => {
     const f = fakeCtx(tmp());

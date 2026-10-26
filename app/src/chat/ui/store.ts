@@ -26,8 +26,8 @@ export function makeApi(invoke: (ch: string, ...a: any[]) => Promise<any>, on: (
     setWired: (mb) => invoke(CHANNELS.setWired, mb),
     send: (t) => invoke(CHANNELS.send, t),
     abort: () => invoke(CHANNELS.abort),
-    history: () => invoke(CHANNELS.history),
-    clear: () => invoke(CHANNELS.clear),
+    history: (modelId) => invoke(CHANNELS.history, modelId),
+    clear: (modelId) => invoke(CHANNELS.clear, modelId),
     getSettings: () => invoke(CHANNELS.getSettings),
     setSettings: (p) => invoke(CHANNELS.setSettings, p),
     onEvent: (cb) => on(CHANNELS.event, cb),
@@ -35,6 +35,7 @@ export function makeApi(invoke: (ch: string, ...a: any[]) => Promise<any>, on: (
 }
 
 export interface Live {
+  modelId: string; // whose conversation the reply belongs to
   content: string;
   reasoning: string;
   meter: StatsMeter;
@@ -43,9 +44,10 @@ export interface Live {
 export interface ChatState {
   models: LocalModel[];
   server: ServerState;
-  messages: ChatMessage[];
+  /** Conversations by model id; a model is missing until its history has been loaded. */
+  histories: Record<string, ChatMessage[]>;
   live?: Live; // the reply being streamed
-  pending?: string; // the user message waiting for that reply
+  pending?: string; // the user message waiting for that reply (in live.modelId's conversation)
   downloads: Record<string, DownloadProgress>;
   wired?: WiredLimit;
   settings?: ChatSettings;
@@ -57,7 +59,8 @@ type Part = 'models' | 'server' | 'messages' | 'live' | 'downloads' | 'wired' | 
 
 /** One store per window, shared by the sidebar view, every chat tab and the status item. */
 export class ChatStore {
-  state: ChatState = { models: [], server: { phase: 'stopped' }, messages: [], downloads: {}, logs: [] };
+  state: ChatState = { models: [], server: { phase: 'stopped' }, histories: {}, downloads: {}, logs: [] };
+  private loading = new Map<string, Promise<void>>();
   private subs = new Set<(parts: Set<Part>) => void>();
   private ready?: Promise<void>;
 
@@ -67,15 +70,10 @@ export class ChatStore {
 
   init(): Promise<void> {
     this.ready ??= (async () => {
-      const [models, server, messages, settings, logs] = await Promise.all([
-        this.api.listModels(),
-        this.api.state(),
-        this.api.history(),
-        this.api.getSettings(),
-        this.api.logs(),
-      ]);
-      Object.assign(this.state, { models, server, messages, settings, logs });
-      this.changed('models', 'server', 'messages', 'settings', 'logs');
+      const [models, server, settings, logs] = await Promise.all([this.api.listModels(), this.api.state(), this.api.getSettings(), this.api.logs()]);
+      Object.assign(this.state, { models, server, settings, logs });
+      this.changed('models', 'server', 'settings', 'logs');
+      if (server.modelId) void this.load(server.modelId);
       void this.refreshWired();
     })();
     return this.ready;
@@ -93,6 +91,28 @@ export class ChatStore {
 
   model(id = this.state.server.modelId): LocalModel | undefined {
     return this.state.models.find((m) => m.id === id);
+  }
+
+  /** The conversation with one model; empty until loaded, and asking starts the load. */
+  messages(modelId: string | undefined): ChatMessage[] {
+    if (!modelId) return [];
+    const m = this.state.histories[modelId];
+    if (!m) void this.load(modelId);
+    return m ?? [];
+  }
+
+  load(modelId: string): Promise<void> {
+    const had = this.loading.get(modelId);
+    if (had) return had;
+    const p = this.api.history(modelId).then(
+      (msgs) => {
+        this.state.histories[modelId] = msgs;
+        this.changed('messages');
+      },
+      () => void this.loading.delete(modelId), // let the next look retry
+    );
+    this.loading.set(modelId, p);
+    return p;
   }
 
   private onEvent(e: ChatEvent): void {
@@ -117,7 +137,7 @@ export class ChatStore {
         this.changed('downloads');
         break;
       case 'delta':
-        if (!st.live) st.live = { content: '', reasoning: '', meter: new StatsMeter() };
+        if (!st.live) st.live = { modelId: e.modelId, content: '', reasoning: '', meter: new StatsMeter() };
         if (e.text) {
           st.live.content += e.text;
           st.live.meter.token('text');
@@ -170,13 +190,15 @@ export class ChatStore {
     });
   }
 
+  /** Sends to the served model; its id names the conversation the turn lands in. */
   async send(text: string): Promise<void> {
-    if (this.state.live || !text.trim()) return;
+    const modelId = this.state.server.modelId;
+    if (this.state.live || !text.trim() || !modelId) return;
     this.state.pending = text;
-    this.state.live = { content: '', reasoning: '', meter: new StatsMeter() };
+    this.state.live = { modelId, content: '', reasoning: '', meter: new StatsMeter() };
     this.changed('live', 'messages');
     await this.run(() => this.api.send(text));
-    this.state.messages = await this.api.history();
+    this.state.histories[modelId] = await this.api.history(modelId);
     this.state.live = undefined;
     this.state.pending = undefined;
     this.changed('live', 'messages');
@@ -186,9 +208,9 @@ export class ChatStore {
     return this.api.abort();
   }
 
-  async clear() {
-    await this.api.clear();
-    this.state.messages = [];
+  async clear(modelId: string) {
+    await this.api.clear(modelId);
+    this.state.histories[modelId] = [];
     this.changed('messages');
   }
 

@@ -125,8 +125,8 @@ export type ChatEvent =
   | { type: 'server-log'; line: string }
   | { type: 'models'; models: LocalModel[] }
   | { type: 'download'; progress: DownloadProgress }
-  | { type: 'delta'; turn: number; text?: string; reasoning?: string }
-  | { type: 'turn-end'; turn: number; message: ChatMessage };
+  | { type: 'delta'; modelId: string; turn: number; text?: string; reasoning?: string }
+  | { type: 'turn-end'; modelId: string; turn: number; message: ChatMessage };
 
 /** Every IPC channel the chat feature uses, so the shell can audit them in one place. */
 export const CHANNELS = {
@@ -161,10 +161,12 @@ export interface ChatApi {
   logs(): Promise<string[]>;
   wired(modelId?: string): Promise<WiredLimit>;
   setWired(mb: number): Promise<WiredLimit>;
+  /** Sends to the model the server is serving; that model's history gets the turn. */
   send(text: string): Promise<ChatMessage>;
   abort(): Promise<void>;
-  history(): Promise<ChatMessage[]>;
-  clear(): Promise<void>;
+  /** Each model keeps its own conversation, saved across restarts. */
+  history(modelId: string): Promise<ChatMessage[]>;
+  clear(modelId: string): Promise<void>;
   getSettings(): Promise<ChatSettings>;
   setSettings(patch: DeepPartial<ChatSettings>): Promise<ChatSettings>;
   onEvent(cb: (e: ChatEvent) => void): () => void;
