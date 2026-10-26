@@ -1,11 +1,34 @@
 // Copilot, main-process side: runs model turns with the user's own key and forwards
 // helper (I1) calls for the copilot's cheap tools. The renderer drives the loop.
 import type { MainContext } from "../shared/ext";
-import { chat, DEFAULT_ANTHROPIC_MODEL, LOCAL_PRESETS, probe, testAnthropicKey, type Effort, type LlmChunk } from "../llm";
+import { anthropicModel, chat, DEFAULT_ANTHROPIC_MODEL, LOCAL_PRESETS, probe, testAnthropicConnection, testAnthropicKey, type ConnectionReport, type Effort, type LlmChunk } from "../llm";
 import type { TurnRequest } from "./session";
 import { HELPER_METHODS } from "./tools";
 
 export const KEY_NAME = "anthropic-api-key";
+/** Last four characters of the saved key, so the panel can say which key is in use. Not secret. */
+const HINT_SETTING = "copilot.keyHint";
+
+export interface KeyStatus {
+  has: boolean;
+  /** e.g. "sk-ant-…x7Qa"; null when the key was saved before hints existed. */
+  hint: string | null;
+  /** Electron safeStorage can encrypt on this machine (macOS Keychain). */
+  encryption: boolean;
+}
+
+export function keyHint(key: string): string {
+  return `${key.startsWith("sk-ant-") ? "sk-ant-" : ""}…${key.slice(-4)}`;
+}
+
+/** Quick format check before any network call. */
+export function keyProblem(key: string): string | null {
+  if (!key) return "Paste a key first.";
+  if (/\s/.test(key)) return "The key has a space or line break in it. Copy it again from the Anthropic Console.";
+  if (!key.startsWith("sk-ant-")) return "That does not look like an Anthropic API key (they start with sk-ant-).";
+  if (key.startsWith("sk-ant-admin")) return "That is an Admin key. The copilot needs a normal API key from Console › API keys.";
+  return null;
+}
 
 export type ProviderSettings =
   | { provider: "anthropic"; model: string; effort: Effort }
@@ -13,28 +36,77 @@ export type ProviderSettings =
 
 export const DEFAULT_SETTINGS: ProviderSettings = { provider: "anthropic", model: DEFAULT_ANTHROPIC_MODEL, effort: "high" };
 
+const EFFORT_SET = new Set<Effort>(["low", "medium", "high", "xhigh", "max"]);
+
+/** Keeps a bad value from the renderer (or an old settings file) out of the request. */
+export function normalizeSettings(s: ProviderSettings): ProviderSettings {
+  if (s?.provider === "openai-compatible") {
+    return { provider: "openai-compatible", preset: s.preset in LOCAL_PRESETS ? s.preset : "custom", baseUrl: String(s.baseUrl ?? ""), model: String(s.model ?? "") };
+  }
+  const model = anthropicModel(s?.model ?? "") ? s.model : DEFAULT_ANTHROPIC_MODEL;
+  const effort = EFFORT_SET.has((s as { effort?: Effort })?.effort as Effort) ? (s as { effort: Effort }).effort : anthropicModel(model)!.defaultEffort;
+  return { provider: "anthropic", model, effort };
+}
+
 const ALLOWED_HELPER = new Set(Object.values(HELPER_METHODS));
 
 export function activate(ctx: MainContext): void {
   const turns = new Map<string, AbortController>();
-  const getSettings = () => ctx.settings.get<ProviderSettings>("copilot.provider", DEFAULT_SETTINGS);
+  const getSettings = () => normalizeSettings(ctx.settings.get<ProviderSettings>("copilot.provider", DEFAULT_SETTINGS));
 
   ctx.handle("copilot:settings", () => getSettings());
   ctx.handle("copilot:setSettings", (s: ProviderSettings) => {
-    ctx.settings.set("copilot.provider", s);
-    return s;
+    const clean = normalizeSettings(s);
+    ctx.settings.set("copilot.provider", clean);
+    return clean;
   });
 
-  // The renderer may set, check or delete the key, never read it back.
+  // The renderer may set, check or delete the key, never read it back. The key is encrypted
+  // with safeStorage (a per-user macOS Keychain entry) and decrypted only here in main.
+  const keyStatus = async (): Promise<KeyStatus> => {
+    const has = await ctx.secrets.has(KEY_NAME);
+    return { has, hint: has ? ctx.settings.get<string | null>(HINT_SETTING, null) : null, encryption: ctx.secrets.available?.() ?? true };
+  };
   ctx.handle("copilot:hasKey", () => ctx.secrets.has(KEY_NAME));
+  ctx.handle("copilot:keyStatus", keyStatus);
   ctx.handle("copilot:setKey", async (key: string) => {
     const k = String(key ?? "").trim();
-    if (!k) return { ok: false, message: "Empty key." };
-    const t = await testAnthropicKey(k);
-    if (t.ok) await ctx.secrets.set(KEY_NAME, k);
-    return t;
+    const bad = keyProblem(k);
+    if (bad) return { ok: false, saved: false, message: bad };
+    const s = getSettings();
+    const t = await testAnthropicKey(k, s.provider === "anthropic" ? s.model : DEFAULT_ANTHROPIC_MODEL);
+    // Offline is not the key's fault: keep it and say so. A rejected key is never stored.
+    if (!t.ok && !t.retryable) return { ok: false, saved: false, message: t.message };
+    try {
+      await ctx.secrets.set(KEY_NAME, k);
+    } catch (err) {
+      return { ok: false, saved: false, message: `Could not encrypt the key: ${err instanceof Error ? err.message : String(err)}` };
+    }
+    ctx.settings.set(HINT_SETTING, keyHint(k));
+    return t.ok
+      ? { ok: true, saved: true, message: "Key works. Saved encrypted in your Keychain." }
+      : { ok: false, saved: true, message: `Saved, but could not check it: ${t.message}` };
   });
-  ctx.handle("copilot:deleteKey", () => ctx.secrets.delete(KEY_NAME));
+  ctx.handle("copilot:deleteKey", async () => {
+    await ctx.secrets.delete(KEY_NAME);
+    ctx.settings.set(HINT_SETTING, null);
+    return keyStatus();
+  });
+
+  /** "Test connection" for whatever the panel has selected. */
+  ctx.handle("copilot:test", async (): Promise<ConnectionReport> => {
+    const s = getSettings();
+    if (s.provider === "anthropic") {
+      const key = await ctx.secrets.get(KEY_NAME);
+      if (!key) return { ok: false, message: "No API key saved yet. Paste yours above." };
+      return testAnthropicConnection(key, s.model);
+    }
+    const r = await probe({ baseUrl: s.baseUrl, timeoutMs: 3000 });
+    if (!r.ok) return { ok: false, message: `No server at ${s.baseUrl} (${r.message ?? "unreachable"}). Start mlx_lm.server, llama.cpp or Ollama first.` };
+    if (!s.model) return { ok: false, message: `Server is up (${r.latencyMs} ms) but no model is picked.` };
+    if (r.models.length && !r.models.includes(s.model)) return { ok: false, message: `Server is up but does not list ${s.model}. It serves: ${r.models.slice(0, 5).join(", ")}` };
+    return { ok: true, message: `Connected to ${s.model} at ${s.baseUrl} in ${r.latencyMs} ms.`, model: s.model, latencyMs: r.latencyMs };
+  });
 
   ctx.handle("copilot:probe", (baseUrl: string) => probe({ baseUrl }));
 

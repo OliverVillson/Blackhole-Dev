@@ -55,6 +55,10 @@ export class Secrets {
     this.save(all);
   }
 
+  available(): boolean {
+    return this.cipher.isEncryptionAvailable();
+  }
+
   async has(name: string): Promise<boolean> {
     this.check(name);
     return Boolean(this.load()[name]);

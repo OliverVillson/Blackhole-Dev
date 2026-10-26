@@ -42,6 +42,8 @@ export interface CopilotHost {
   invoke(channel: string, payload: object): Promise<unknown>;
   /** Read a file from disk (for files not open in the editor). */
   readFile?(path: string): Promise<string>;
+  /** Recipe files in the workspace (list_files tool). */
+  listFiles?(): Promise<string[]>;
   /** Open a file in the editor; I3 only works on open buffers. */
   openFile?(path: string): Promise<void>;
   /** Timer for the pacer. Tests pass a manual one. */
@@ -464,6 +466,10 @@ export class CopilotSession {
       case "read_file": {
         const t = await this.readAny(input.path);
         return { content: numbered(t), summary: `read ${input.path} · ${t.split("\n").length} lines` };
+      }
+      case "list_files": {
+        const files = this.host.listFiles ? await this.host.listFiles() : [];
+        return { content: files.length ? files.join("\n") : "No recipe files yet.", summary: `listed ${files.length} recipe file(s)` };
       }
       case "edit_file": {
         await this.ensureOpen(input.path);

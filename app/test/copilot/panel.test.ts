@@ -28,12 +28,13 @@ describe("copilot panel", () => {
       invoke: async (c: string) => {
         calls.push(c);
         if (c === "copilot:settings") return { provider: "anthropic", model: "claude-opus-5-5", effort: "high" };
-        if (c === "copilot:hasKey") return false;
+        if (c === "copilot:keyStatus") return { has: false, hint: null, encryption: true };
         return null;
       },
     });
     await new Promise((r) => setTimeout(r, 0));
     expect(el.querySelector(".cp-key")!.classList.contains("on")).toBe(true);
+    expect(el.querySelector(".cp-key")!.classList.contains("edit")).toBe(true);
     expect(el.textContent).toContain("@a.py");
     const ta = el.querySelector<HTMLTextAreaElement>("#cp-steer")!;
     ta.value = "make a recipe";
@@ -41,6 +42,48 @@ describe("copilot panel", () => {
     await new Promise((r) => setTimeout(r, 10));
     expect(el.querySelector(".cp-me")!.textContent).toBe("make a recipe");
     expect(el.querySelector(".cp-ai")!.textContent).toBe("Sure, here is the plan.");
-    expect(calls).toContain("copilot:hasKey");
+    expect(calls).toContain("copilot:keyStatus");
+  });
+
+  it("shows the saved key's hint, saves effort and model changes, and runs Test connection", async () => {
+    const session = new CopilotSession({ editor: new FakeEditor(), activeFile: () => null, async *turn() {}, abortTurn() {}, helper: async () => ({}), invoke: async () => ({}) });
+    const calls: [string, any][] = [];
+    let settings: any = { provider: "anthropic", model: "claude-opus-5-5", effort: "high" };
+    const el = document.createElement("div");
+    renderCopilotPanel(el, {
+      session,
+      activeFile: () => null,
+      onActiveFile: () => () => {},
+      invoke: async (c: string, arg?: any) => {
+        calls.push([c, arg]);
+        if (c === "copilot:settings") return settings;
+        if (c === "copilot:setSettings") return (settings = arg);
+        if (c === "copilot:keyStatus") return { has: true, hint: "sk-ant-…x7Qa", encryption: true };
+        if (c === "copilot:test") return { ok: false, message: "Your credit balance is too low." };
+        return null;
+      },
+    });
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+    await tick();
+    await tick();
+    const key = el.querySelector(".cp-key")!;
+    expect(key.classList.contains("edit")).toBe(false);
+    expect(key.textContent).toContain("sk-ant-…x7Qa");
+    const [model, effort] = [...el.querySelectorAll("select")] as HTMLSelectElement[];
+    expect(effort.value).toBe("high");
+    effort.value = "max";
+    effort.dispatchEvent(new Event("change"));
+    await tick();
+    expect(settings).toEqual({ provider: "anthropic", model: "claude-opus-5-5", effort: "max" });
+    model.value = "anthropic:claude-haiku-5-5";
+    model.dispatchEvent(new Event("change"));
+    await tick();
+    expect(settings).toEqual({ provider: "anthropic", model: "claude-haiku-5-5", effort: "max" });
+    expect(el.querySelector(".cp-blurb")!.textContent).toMatch(/cheap/);
+    [...el.querySelectorAll("button")].find((b) => b.textContent === "Test connection")!.click();
+    await tick();
+    await tick();
+    expect(el.querySelector(".cp-testmsg")!.textContent).toBe("Your credit balance is too low.");
+    expect(el.querySelector(".cp-conn")!.classList.contains("bad")).toBe(true);
   });
 });
