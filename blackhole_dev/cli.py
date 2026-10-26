@@ -7,8 +7,10 @@
     blackhole inspect MODEL "experts[0:4]" --stats   weight statistics per part
     blackhole inspect MODEL "experts[0:4]" --measure hex3,int4   round-to-nearest error per format
 
-    blackhole fn list                                named functions and their params
+    blackhole fn list                                named functions, their params and where they come from
     blackhole fn show NAME
+    blackhole fn source NAME                         the code that runs for NAME
+    blackhole fn fork NAME [--as NEW] [--to DIR]     copy it into your functions folder (same name = override)
     blackhole fn run MODEL NAME [--select Q] [--set k=v ...] [--scores F] [--functions FILE ...] -o OUT
 """
 
@@ -39,6 +41,13 @@ def add_commands(sub) -> None:
     fs.add_parser("list")
     sh = fs.add_parser("show")
     sh.add_argument("name")
+    so = fs.add_parser("source")
+    so.add_argument("name")
+    fk = fs.add_parser("fork")
+    fk.add_argument("name")
+    fk.add_argument("--as", dest="new_name")
+    fk.add_argument("--to", dest="dest")
+    fk.add_argument("--overwrite", action="store_true")
     r = fs.add_parser("run")
     r.add_argument("model")
     r.add_argument("name")
@@ -102,12 +111,26 @@ def dispatch(a) -> int:
         if a.fn_cmd == "list":
             for name, f in fns.registry().items():
                 ps = ", ".join(f"{k}={v['default']!r}" if not v["required"] else k for k, v in f.params.items())
-                print(f"{name:<24} per {f.per:<7} {f.doc.splitlines()[0] if f.doc else ''}")
+                over = len(fns.definitions(name)) > 1
+                print(f"{name:<24} per {f.per:<7} {fns.LAYERS[f.layer] + ('*' if over else ''):<10} "
+                      f"{f.doc.splitlines()[0] if f.doc else ''}")
                 if ps:
                     print(f"{'':<24} ({ps})")
             return 0
+            for p in fns.problems():
+                print(f"problem: {p['path']}: {p['error']}", file=sys.stderr)
+            print("(* = overrides a definition in a lower layer: builtin < package < user < workspace < recipe)")
+            return 0
         if a.fn_cmd == "show":
             print(json.dumps(fns.describe(a.name), indent=2, default=str))
+            return 0
+        if a.fn_cmd == "source":
+            print(fns.source(a.name)["text"], end="")
+            return 0
+        if a.fn_cmd == "fork":
+            out = fns.fork(a.name, a.dest, a.new_name, a.overwrite)
+            print(f"forked {a.name} -> {out['path']}" + (f" (overrides {', '.join(out['overrides'])})"
+                                                         if out["overrides"] else ""))
             return 0
         for spec in a.functions:
             fns.load(spec)
