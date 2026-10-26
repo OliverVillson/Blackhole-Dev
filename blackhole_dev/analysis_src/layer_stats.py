@@ -20,6 +20,7 @@ def run(r, m, metric: str = "kurtosis", sample: int = 256):
         raise ValueError(f"metric is one of {', '.join(METRICS)}")
     table, series = [], {}
     for L in m.layers:
+        r.progress(f"layer {L.index}", L.index / max(len(m.layers), 1))
         for g, ps in layer_groups(L).items():
             s = sampled_stats(ps, sample)
             series.setdefault(g, {})[L.index] = s[metric]

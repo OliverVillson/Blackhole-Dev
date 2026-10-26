@@ -23,10 +23,29 @@ def _other(m, other):
     return _open_cache[key], key
 
 
+def _renumbered(m, b) -> set:
+    """Layers whose experts were dropped, merged or added: expert N is not the same expert in
+    both models there, so comparing their tensors by name would be meaningless."""
+    out = set()
+    for La, Lb in zip(m.layers, b.layers):
+        if (La.moe is None) != (Lb.moe is None) or (La.moe and La.moe.num_experts != Lb.moe.num_experts):
+            out.add(La.index)
+    return out
+
+
+def _comparable(m, b, pairs) -> tuple[list, list]:
+    skip = _renumbered(m, b)
+    keep, left = [], []
+    for n in pairs["same_shape"]:
+        L = layer_of(n)
+        (left if L in skip and ".experts" in n else keep).append(n)
+    return keep, left
+
+
 def _cost(m, other="", sample=64):
     b, _ = _other(m, other)
-    pairs = tensor_pairs(m, b)
-    return sum(rel_diff_bytes(m._t[n], b._t[n], sample) for n in pairs["same_shape"])
+    keep, _ = _comparable(m, b, tensor_pairs(m, b))
+    return sum(rel_diff_bytes(m._t[n], b._t[n], sample) for n in keep)
 
 
 @analysis("compare", title="Compare two models", needs="weights", cost=_cost, group="forks")
@@ -38,19 +57,26 @@ def run(r, m, other: str = "", sample: int = 64):
     b, path = _other(m, other)
     pa, pb = m.plan(), b.plan()
     pairs = tensor_pairs(m, b)
+    keep, renumbered = _comparable(m, b, pairs)
     diffs = {}
     same = 0
-    for n in pairs["same_shape"]:
+    for k, n in enumerate(keep):
+        if k % 64 == 0:
+            r.progress(f"comparing {n}", k / max(len(keep), 1))
         d = rel_diff(m._t[n], b._t[n], sample)
         diffs[n] = d
         same += d["identical"] or d["rel_diff"] == 0.0
     changed = {n: d for n, d in diffs.items() if d["rel_diff"] > 0}
     r.title(f"{Path(str(m.id)).name} vs {Path(path).name}")
     r.tiles([("This model", round(pa.total_gb, 3), "GB"), ("Other", round(pb.total_gb, 3), "GB"),
-             ("Tensors changed", len(changed), f"of {len(pairs['same_shape'])} shared"),
+             ("Tensors changed", len(changed), f"of {len(keep)} compared"),
              ("Unchanged", same), ("Only here", len(pairs["only_a"])), ("Only there", len(pairs["only_b"])),
              *([("Parent changed since fork", "yes", "its files differ from the forked ones", "warn")]
                if not other and getattr(m, "root", None) and parent_changed(Path(m.root)) else [])])
+    if renumbered:
+        r.text(f"Experts were dropped, merged or added in layer{'s' if len(_renumbered(m, b)) > 1 else ''} "
+               f"{', '.join(map(str, sorted(_renumbered(m, b))))}, so expert N is a different expert in each model "
+               f"there: those {len(renumbered)} expert tensors are left out of the weight comparison.")
     gs = sorted(set(pa.groups) | set(pb.groups))
     r.bar("Size by part (GB)", gs, {"this model": [round(pa.groups.get(g, {}).get("gb", 0), 4) for g in gs],
                                     "other": [round(pb.groups.get(g, {}).get("gb", 0), 4) for g in gs]}, ylabel="GB")

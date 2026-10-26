@@ -119,8 +119,15 @@ def test_fork_links_records_parent_and_diffs(model):
     top = next(b for b in out["blocks"] if b.get("title") == "Most changed tensors")
     assert top["rows"][0][0] == "model.layers.1.mlp.experts.2.down_proj.weight"
     assert pytest.approx(top["rows"][0][1]) == 1.0
+    fm = blackhole_dev.open(root)
+    fm.layers[0].moe.drop([1])
+    fm.save(root, force=True)                                # uneven expert counts: fine for a diff
+    out = an.run("compare", blackhole_dev.open(root))
+    assert any(b["kind"] == "text" and "layer 0" in b["text"] for b in out["blocks"])
+    top = next(b for b in out["blocks"] if b.get("title") == "Most changed tensors")
+    assert not any(".layers.0.mlp.experts." in row[0] for row in top["rows"])
     chain = lineage(root)
-    assert [x["name"] for x in chain] == ["hot", "tiny"] and chain[0]["edits"] == 1
+    assert [x["name"] for x in chain] == ["hot", "tiny"] and chain[0]["edits"] >= 1
     f2 = fork(root, name="hot")                              # a free name next to it
     assert Path(f2["path"]).name == "hot-2" and lineage(f2["path"])[1]["name"] == "hot"
     names = {x["name"]: x for x in models([Path(model).parent])}

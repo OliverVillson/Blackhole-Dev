@@ -490,11 +490,11 @@ class Helper:
         if p.get("path") and not p.get("name"):
             an.refresh()
             return an.run_file(self._path(p), m, p.get("params") or {}, budget=budget, text=p.get("text"),
-                               name=p.get("analysis"))
+                               name=p.get("analysis"), progress=self.progress)
         a = self._analysis(p)
         if a.needs != "none" and m is None:
             raise RpcError(MODEL_NOT_FOUND, "open a model first (Analysis > Model, or anatomy.open)")
-        return an.run(a, m, p.get("params") or {}, budget=budget)
+        return an.run(a, m, p.get("params") or {}, budget=budget, progress=self.progress)
 
     def _model_brief(self, m) -> dict | None:
         if m is None:

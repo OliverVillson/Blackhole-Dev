@@ -18,6 +18,7 @@ const LABEL: Record<string, string> = {
   download: "Download a large model",
   "paid.api": "Spend paid API credit",
   "paid.gpu": "Spend paid GPU time",
+  "compute.local": "Run a long job on this Mac",
 };
 
 gate.onRequest((req) => {

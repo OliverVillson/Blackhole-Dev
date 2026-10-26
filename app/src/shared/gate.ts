@@ -1,8 +1,9 @@
 // I4 confirm gate. Expensive operations only run after a human click in the gate window.
 
-export type GatedAction = "vm.up" | "vm.down" | "run.launch" | "download" | "paid.api" | "paid.gpu";
+// compute.local: a long local job, e.g. an analysis that reads many GB of weights or a full model copy.
+export type GatedAction = "vm.up" | "vm.down" | "run.launch" | "download" | "paid.api" | "paid.gpu" | "compute.local";
 
-export const GATED_ACTIONS: readonly GatedAction[] = ["vm.up", "vm.down", "run.launch", "download", "paid.api", "paid.gpu"];
+export const GATED_ACTIONS: readonly GatedAction[] = ["vm.up", "vm.down", "run.launch", "download", "paid.api", "paid.gpu", "compute.local"];
 
 export interface ConfirmRequest {
   action: GatedAction;

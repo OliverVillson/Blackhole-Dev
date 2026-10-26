@@ -100,8 +100,9 @@ class Report:
     """What an analysis hands the app: an ordered list of blocks. Every chart block also
     carries its numbers, so the app can show it as a table too."""
 
-    def __init__(self, model=None):
+    def __init__(self, model=None, progress: Callable | None = None):
         self.model = model
+        self._progress = progress
         self.blocks: list[dict] = []
         self.heading: str | None = None
         self.metrics: dict = {}
@@ -179,6 +180,11 @@ class Report:
         buf = io.BytesIO()
         fig.savefig(buf, format="png", dpi=144, bbox_inches="tight", facecolor=fig.get_facecolor())
         self._add("image", title=title, png=base64.b64encode(buf.getvalue()).decode())
+
+    def progress(self, message: str, fraction: float | None = None) -> None:
+        """Tell the app how far a long analysis is (and give it a point to cancel at)."""
+        if self._progress is not None:
+            self._progress(message, fraction)
 
     # helpers analyses share
     def sampled(self, parts, rows: int = 256) -> dict:
@@ -407,14 +413,15 @@ def _coerce(v, t: str):
     return v
 
 
-def run(name_or_fn, m=None, params: dict | None = None, budget: int | None = None) -> dict:
+def run(name_or_fn, m=None, params: dict | None = None, budget: int | None = None,
+        progress: Callable | None = None) -> dict:
     """Run an analysis (a name, an Analysis, or a decorated function) on model m."""
     a = name_or_fn if isinstance(name_or_fn, Analysis) else \
         getattr(name_or_fn, "analysis", None) or get(str(name_or_fn))
     if a.needs != "none" and m is None:
         raise ValueError(f"{a.name} needs a model: open one first")
     kw = _with_defaults(a, params or {})
-    r = Report(m)
+    r = Report(m, progress)
     t0 = time.time()
     with ReadMeter(budget) as meter:
         a.fn(r, m, **kw)
@@ -426,14 +433,14 @@ def run(name_or_fn, m=None, params: dict | None = None, budget: int | None = Non
 
 
 def run_file(path: str | Path, m=None, params: dict | None = None, budget: int | None = None,
-             name: str | None = None, text: str | None = None) -> dict:
+             name: str | None = None, text: str | None = None, progress: Callable | None = None) -> dict:
     """Run a script file: its @analysis (the one named `name`, else the first), or, when it
     has none, the file itself top to bottom with r, m, params and open in scope."""
     import blackhole_dev
     path = Path(path).expanduser()
     code = text if text is not None else path.read_text()
     before = {n: dict(d) for n, d in _DEFS.items()}
-    r = Report(m)
+    r = Report(m, progress)
     g = {"__name__": "__analysis__", "__file__": str(path), "r": r, "m": m, "params": dict(params or {}),
          "open": blackhole_dev.open, "np": np}
     _layer_now.append(WORKSPACE + 1)          # the open file wins over everything while it runs
@@ -447,7 +454,7 @@ def run_file(path: str | Path, m=None, params: dict | None = None, budget: int |
                 pick = next((x for x in new if x.name == name), new[0])
                 for d in _DEFS.values():
                     d.pop(WORKSPACE + 1, None)
-                out = run(pick, m, params)            # this meter keeps counting (and holding the budget)
+                out = run(pick, m, params, progress=progress)            # this meter keeps counting (and holding the budget)
                 out["reads"] = meter.bytes
                 return out
     finally:
