@@ -2,7 +2,7 @@
 import type { RendererModule } from "./shared/ext";
 
 export const rendererModules: [id: string, load: () => Promise<RendererModule>][] = [
-  // ["copilot", () => import("./copilot/renderer")],
+  ["copilot", () => import("./copilot/renderer")],
   // ["vm", () => import("./vm/renderer")],
   // ["chat", () => import("./chat/renderer")],
 ];
