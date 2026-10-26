@@ -1,0 +1,77 @@
+# REAP/Q-HEX built from named anatomy functions: the same recipe as the pipeline's reap, reaq
+# and HEX stages, written as `model.edit` stages that call functions by name. Swap a function
+# for your own (a .py file listed in `functions`) to change the recipe without touching the
+# harness. BlackHole-Harness originals: REAQ picks each expert's table size from its REAP
+# score; HEX stores each expert with its own learned 8/16-level table (3.25 / 4.25 bpw).
+#
+# Everything here runs on the CPU of the machine that holds the weights except reap-score and
+# the GPTQ Hessians of hex-quantize, which run the model on `device` over `calib` texts.
+
+api = "blackhole/v1"
+id = "anatomy/reapq-hex"
+version = "0.1.0"
+title = "REAP/Q-HEX from named functions"
+description = "REAP-prune, REAQ-rank and HEX-quantize a MoE with the anatomy API's named functions; packed HEX layout out."
+author = "blackhole"
+license = "Apache-2.0"
+tags = ["moe", "reap", "reaq", "hex", "anatomy", "functions", "blackhole-original"]
+
+[targets]
+architectures = ["moe", "hybrid"]
+
+[inputs.prune]
+type = "float"
+default = 0.25
+min = 0.0
+max = 0.5
+help = "Share of experts REAP removes in every MoE layer"
+
+[inputs.avg_bits]
+type = "float"
+default = 3.5
+min = 3.25
+max = 4.25
+help = "Average expert bits: REAQ gives the hottest experts hex4 (4.25 bpw) and the rest hex3 (3.25) to land here"
+
+[inputs.calib]
+type = "path"
+default = "calib.jsonl"
+help = "Calibration texts (.jsonl with a text field, or .txt paragraphs) for REAP scores and GPTQ"
+
+[[stage]]
+id = "score"
+kind = "model.edit"
+fn = "reap-score"
+args = { calib = "${inputs.calib}" }
+
+[[stage]]
+id = "prune"
+kind = "model.edit"
+fn = "reap-prune"
+args = { ratio = "${inputs.prune}" }
+
+[[stage]]
+id = "hex"
+kind = "model.edit"
+steps = [
+  { fn = "reap-score", calib = "${inputs.calib}" },        # re-score the survivors
+  { fn = "reaq", avg_bits = "${inputs.avg_bits}" },
+  { fn = "hex-quantize", calib = "${inputs.calib}" },
+]
+  [[stage.gates]]
+  metric = "hex-quantize.rel_mse"
+  op = "<="
+  value = 0.2
+
+[[stage]]
+id = "pack"
+kind = "model.edit"
+fn = "quant"                       # a no-op mark; this stage only writes the packed HEX layout
+args = { select = "layers[*].moe.router", format = "bf16" }
+pack = "hex"
+
+[eval]
+  [[eval.gates]]
+  metric = "hex.hex-quantize.rel_mse"
+  op = "<="
+  value = 0.2
