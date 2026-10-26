@@ -7,35 +7,85 @@ macOS (Apple silicon) first.
 ## Boot it on a Mac (dev mode)
 
 You need Node 22+, Python 3.11+, git, and the Xcode command line tools (`xcode-select --install`).
+Each block below is safe to paste as a whole.
+
+**1. Get the code.** Both repos, side by side (the harness gives you the `pipeline.*` steps and the
+presets):
 
 ```bash
-# 1. Get the code (the app lives in Blackhole-Dev/app; the public harness is optional but enables pipeline.* steps)
-mkdir -p ~/src && cd ~/src
+mkdir -p ~/src
+cd ~/src
 git clone https://github.com/OliverVillson/Blackhole-Dev.git
 git clone https://github.com/OliverVillson/BlackHole-Harness.git
+```
 
-# 2. Python env for the helper (python -m blackhole_dev.rpc)
+If you already have one of them, skip that line and `git pull` in it instead.
+
+**2. Python environment** for the helper the app talks to (`python -m blackhole_dev.rpc`):
+
+```bash
 python3 -m venv ~/bhdev-venv
 source ~/bhdev-venv/bin/activate
-pip install -e ~/src/BlackHole-Harness -e ~/src/BlackHole-Harness/harness -e ~/src/Blackhole-Dev
+pip install -e ~/src/BlackHole-Harness
+pip install -e ~/src/BlackHole-Harness/harness
+pip install -e ~/src/Blackhole-Dev
+```
 
-# 3. The app
+**3. The app:**
+
+```bash
 cd ~/src/Blackhole-Dev/app
 npm install
 npm run dev
 ```
 
+`npm install` and `npm run dev` both check that the Electron binary is really there and download it
+when it is not (Electron's own installer can exit silently without it, which shows up as
+"Electron uninstall"). If the check still fails it prints why and what to run. To check everything
+at once (Electron, Node, node-pty, the Python helper, ssh, rsync):
+
+```bash
+cd ~/src/Blackhole-Dev/app
+source ~/bhdev-venv/bin/activate
+npm run doctor
+```
+
+On npm 12 and newer, `npm install` may also warn that some packages' install scripts are not yet
+allowed. Allow the ones the app needs, then install again:
+
+```bash
+cd ~/src/Blackhole-Dev/app
+npm install-scripts approve electron node-pty fsevents
+npm install
+```
+
+If Electron is still missing after that, clear its download cache and reinstall it:
+
+```bash
+cd ~/src/Blackhole-Dev/app
+unset ELECTRON_SKIP_BINARY_DOWNLOAD ELECTRON_OVERRIDE_DIST_PATH
+rm -rf ~/Library/Caches/electron node_modules/electron
+npm install
+npm run doctor
+```
+
+To update later, `git pull --autostash` in `~/src/Blackhole-Dev` (it keeps a local `allowScripts`
+entry that `npm install-scripts approve` writes into `package.json`), then `npm install` in `app/`.
+
+`node-pty` is what gives the TERMINAL panel a real TTY; it builds from source on Apple silicon and
+takes a few seconds. If it fails, the app still runs and the terminal falls back to plain pipes.
+
 On first start the app creates `~/BlackHole-Dev/` with `recipes/`, `functions/` and `models/`
 and a starter recipe. Then:
 
-- **Settings (gear, bottom left) > Python helper**: paste `~/bhdev-venv/bin/python` (full path,
-  e.g. `/Users/you/bhdev-venv/bin/python`) and press *Save and restart*. The status bar shows
+- **Settings (gear, bottom left) > Python helper**: paste the full path of the venv's Python,
+  `/Users/<you>/bhdev-venv/bin/python`, and press *Save and restart*. The status bar shows
   `blackhole_dev <version> · Python <version>` when the helper is up.
 - **Settings > Copilot key**: paste your Anthropic key. It is encrypted with the macOS Keychain and
   only ever read by the app's main process. No billing goes through the app.
 - **Settings > Checks** lists Python, blackhole_dev, ssh and rsync.
 
-Other commands: `npm run build` (production bundle), `npm start` (run that bundle),
+Other commands: `npm run doctor` (environment check), `npm run build` (production bundle), `npm start` (run that bundle),
 `npm run dist:mac` (unsigned `.dmg` in `dist/`), `npm test`, `npm run typecheck`.
 
 ## Layout

@@ -15,7 +15,9 @@
     "dist:mac": "electron-vite build && electron-builder --mac --arm64",
     "start": "electron-vite preview",
     "test:e2e": "electron-vite build && xvfb-run -a node test/e2e/smoke.mjs",
-    "postinstall": "electron-builder install-app-deps || echo 'node-pty rebuild skipped: the terminal falls back to plain pipes'"
+    "postinstall": "electron-builder install-app-deps || echo 'node-pty rebuild skipped: the terminal falls back to plain pipes'; node scripts/ensure-electron.mjs",
+    "predev": "node scripts/ensure-electron.mjs",
+    "doctor": "node scripts/ensure-electron.mjs --doctor"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.3",
