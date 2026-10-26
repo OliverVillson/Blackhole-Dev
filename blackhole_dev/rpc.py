@@ -184,7 +184,10 @@ class Helper:
         dirs = [d for d in (self.ws.get("functionsDir"),) if d]
         if hasattr(fns, "set_user_dirs"):
             fns.set_user_dirs(dirs)
-            return [], []
+            if hasattr(fns, "add_workspace") and self.ws.get("workspace"):
+                fns.add_workspace(self.ws["workspace"])
+            probs = fns.refresh() if hasattr(fns, "refresh") else []
+            return [], [{"error": str(x)} for x in probs or []]
         loaded, failed = [], []
         for d in dirs:
             for f in sorted(Path(d).expanduser().glob("*.py")):
@@ -365,8 +368,10 @@ class Helper:
 
     def functions_list(self, p: dict) -> list[dict]:
         from blackhole_dev import functions as fns
-        if callable(getattr(fns, "list", None)):
-            rows = fns.list()
+        if callable(getattr(fns, "rows", None)):
+            if hasattr(fns, "refresh"):
+                fns.refresh()                     # pick up saves in the user / workspace folders
+            rows = fns.rows()
             out = []
             for r in rows:
                 r = dict(r)
@@ -399,7 +404,7 @@ class Helper:
     def functions_fork(self, p: dict) -> dict:
         from blackhole_dev import functions as fns
         if callable(getattr(fns, "fork", None)):
-            kw = {k: p[k] for k in ("dest", "new_name") if p.get(k)}
+            kw = {k: p[k] for k in ("dest", "new_name", "overwrite") if p.get(k)}
             if not kw.get("dest") and self.ws.get("functionsDir"):
                 kw["dest"] = self.ws["functionsDir"]
             return dict(fns.fork(p["name"], **kw))
