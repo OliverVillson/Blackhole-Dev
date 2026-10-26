@@ -20,6 +20,15 @@ import numpy as np
 
 from blackhole.anatomy import st
 
+# Read meters (blackhole_dev.analysis.ReadMeter): every byte a File source hands out is counted
+# here first, so an analysis can be held to a read budget before it touches the weights.
+METERS: list = []
+
+
+def _count(n: int) -> None:
+    for m in METERS:
+        m.add(int(n))
+
 
 class Source:
     dtype: str
@@ -77,10 +86,14 @@ class File(Source):
         return e.blob.array(e.offset, e.dtype, e.shape)
 
     def raw(self) -> np.ndarray:
+        if METERS:
+            _count(self.nbytes)
         a = self._full()
         return a if self._rows is None else np.asarray(a[self._rows])
 
     def read(self, index) -> np.ndarray:
+        if METERS:
+            _count(np.broadcast_to(np.empty((), bool), self.shape)[index].size * st.BITS[self.dtype] // 8)
         a = self._full()
         if self._rows is not None:
             idx = index if isinstance(index, tuple) else (index,)

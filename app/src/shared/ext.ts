@@ -39,7 +39,8 @@ export interface MainContext {
   };
   helper: {
     call<M extends HelperMethod>(method: M, params: HelperParams<M>): Promise<HelperResult<M>>;
-    call<T = unknown>(method: string, params?: object): Promise<T>;
+    /** timeoutMs: default 120 s; a timed-out request is cancelled in the helper. */
+    call<T = unknown>(method: string, params?: object, timeoutMs?: number): Promise<T>;
     onNotify(method: string, cb: (params: any) => void): Dispose;
     status(): HelperStatus;
   };

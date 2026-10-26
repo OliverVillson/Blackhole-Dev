@@ -25,6 +25,7 @@ the same HEX layout this package writes.
 |---|---|
 | `blackhole_dev/` | model, parts, query, sources, layout (structure and lazy tensors); functions (the registry: layers, override rule, fork); live (torch); op (`model.edit`); jobctx (job functions as pipeline stages); cli (`blackhole inspect`, `blackhole fn`) |
 | `blackhole_dev/functions_src/` | every built-in function as one readable, forkable file: REAP / REAQ / HEX and the other model edits, and the pipeline's GPU stages (calibrate, reap-gpu, traces, distil, qheal, gptq, mlx-export, bench, ...) |
+| `blackhole_dev/analysis/`, `analysis_src/`, `fork.py` | plots and stats as named, forkable scripts the app draws (overview, layer and expert stats, REAP and router heatmaps, histograms, quant error, job results, compare) with a read budget; model forks with a lineage receipt. Guide: [docs/analysis.md](docs/analysis.md) |
 | `recipes/` | the presets as Python recipes made only of named functions (see recipes/README.md) |
 | `schemas/reapq-hex.toml` | the REAP/Q-HEX recipe written as `model.edit` stages |
 | `tests/` | numpy half on hand-written checkpoints, torch half on tiny real models; test_functions (override rule, fork, every stage and knob reachable), test_jobfns (a recipe of job functions runs the pipeline on a tiny model) |

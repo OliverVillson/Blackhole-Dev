@@ -120,7 +120,7 @@ async function main(): Promise<void> {
     gate,
     secrets,
     helper: {
-      call: (method: string, params?: object) => helper.call(method, params),
+      call: (method: string, params?: object, timeoutMs?: number) => helper.call(method, params, timeoutMs),
       onNotify: (method, cb) => {
         const l = (p: unknown) => cb(p);
         helper.on(`notify:${method}`, l);

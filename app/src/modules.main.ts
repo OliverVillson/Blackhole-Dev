@@ -5,4 +5,5 @@ export const mainModules: [id: string, load: () => Promise<MainModule>][] = [
   ["copilot", () => import("./copilot/main")],
   ["vm", () => import("./vm/main")],
   ["chat", () => import("./chat/main")],
+  ["analysis", () => import("./analysis/main")],
 ];

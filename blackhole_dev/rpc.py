@@ -13,9 +13,12 @@ named-params object. Shapes are the I1 contract in
   recipe.fromToml recipe.fromPreset recipe.presets
   anatomy.open anatomy.summary anatomy.children anatomy.get
   functions.list functions.source functions.fork
+  analysis.list analysis.source analysis.fork analysis.estimate analysis.run
+  model.list model.forkPlan model.fork model.lineage
 
 Errors: -32001 recipe (data.problems), -32002 model not found, -32003 cancelled,
--32601 unknown method, -32602 bad params, -32000 anything else (data.traceback).
+-32004 read budget (data.used, data.wanted, data.budget: run again with a bigger budget once
+the user agrees), -32601 unknown method, -32602 bad params, -32000 anything else (data.traceback).
 """
 
 from __future__ import annotations
@@ -32,7 +35,7 @@ from typing import Any, Callable
 
 import blackhole_dev
 
-RECIPE_ERROR, MODEL_NOT_FOUND, CANCELLED = -32001, -32002, -32003
+RECIPE_ERROR, MODEL_NOT_FOUND, CANCELLED, READ_BUDGET = -32001, -32002, -32003, -32004
 
 
 class RpcError(Exception):
@@ -51,6 +54,7 @@ class Helper:
         self.lock = threading.Lock()
         self.ws: dict = {"workspace": os.getcwd()}
         self.model = None
+        self.amodel: tuple[str, Any] | None = None     # (path, model) a run named, kept for the next run
         self.cancelled: set = set()
         self.current = None
         self.methods: dict[str, Callable[[dict], Any]] = {
@@ -63,6 +67,11 @@ class Helper:
             "anatomy.children": self.anatomy_children, "anatomy.get": self.anatomy_get,
             "functions.list": self.functions_list, "functions.source": self.functions_source,
             "functions.fork": self.functions_fork,
+            "analysis.list": self.analysis_list, "analysis.source": self.analysis_source,
+            "analysis.fork": self.analysis_fork, "analysis.estimate": self.analysis_estimate,
+            "analysis.run": self.analysis_run,
+            "model.list": self.model_list, "model.forkPlan": self.model_fork_plan, "model.fork": self.model_fork,
+            "model.lineage": self.model_lineage,
         }
         self.stop = False
 
@@ -111,7 +120,10 @@ class Helper:
         except Cancelled:
             return _err(mid, CANCELLED, "cancelled")
         except Exception as e:  # noqa: BLE001
+            from blackhole_dev.analysis import ReadBudgetExceeded
             from blackhole_dev.recipe.core import RecipeError
+            if isinstance(e, ReadBudgetExceeded):
+                return _err(mid, READ_BUDGET, str(e), {"used": e.used, "wanted": e.wanted, "budget": e.budget})
             if isinstance(e, RecipeError):
                 return _err(mid, RECIPE_ERROR, str(e), {"problems": e.problems})
             if isinstance(e, KeyError) and e.args and isinstance(e.args[0], str) and " " in e.args[0]:
@@ -169,6 +181,8 @@ class Helper:
     def initialize(self, p: dict) -> dict:
         self.ws.update({k: v for k, v in p.items() if v is not None})
         loaded, failed = self._load_user_functions()
+        from blackhole_dev import analysis as an
+        an.set_workspace(self.ws.get("workspace"))
         from blackhole_dev.recipe import pipeline as pl
         return {"version": blackhole_dev.__version__, "python": sys.version.split()[0],
                 "methods": sorted(self.methods), "pipeline": pl.HAVE_PIPELINE,
@@ -409,6 +423,105 @@ class Helper:
                 kw["dest"] = self.ws["functionsDir"]
             return dict(fns.fork(p["name"], **kw))
         raise RpcError(-32000, "fork arrives with the functions library (WS3); not in this blackhole_dev yet")
+
+
+    # ------------------------------------------------------------------ analysis (plots and stats) and forks
+    def analysis_list(self, p: dict) -> dict:
+        from blackhole_dev import analysis as an
+        probs = an.refresh()
+        d = an.analysis_dir()
+        return {"analyses": an.rows(), "problems": probs, "dir": str(d) if d else None,
+                "model": self._model_brief(self.model)}
+
+    def analysis_source(self, p: dict) -> dict:
+        from blackhole_dev import analysis as an
+        an.refresh()
+        return an.source(p["name"])
+
+    def analysis_fork(self, p: dict) -> dict:
+        from blackhole_dev import analysis as an
+        an.refresh()
+        return an.fork(p["name"], new_name=p.get("newName") or None, overwrite=bool(p.get("overwrite")))
+
+    def _analysis_model(self, p: dict):
+        """The model a run is about: params.model (a folder or Hub id, kept open for the next
+        run), else the one anatomy.open opened."""
+        want = p.get("model")
+        if not want:
+            return self.model
+        q = Path(want).expanduser()
+        key = str(q)
+        if self.amodel and self.amodel[0] == key:
+            return self.amodel[1]
+        from blackhole_dev.model import AnatomyError
+        self.progress(f"opening {want}", 0.05)
+        try:
+            m = blackhole_dev.open(q if q.is_dir() else want)
+        except (AnatomyError, FileNotFoundError, OSError) as e:
+            raise RpcError(MODEL_NOT_FOUND, f"cannot open {want}: {e}") from None
+        self.amodel = (key, m)
+        return m
+
+    def _analysis(self, p: dict):
+        from blackhole_dev import analysis as an
+        an.refresh()
+        if p.get("name"):
+            return an.get(p["name"])
+        raise RpcError(-32602, "name or path is required")
+
+    def analysis_estimate(self, p: dict) -> dict:
+        from blackhole_dev import analysis as an
+        m = self._analysis_model(p)
+        if p.get("path") and not p.get("name"):
+            return {"bytes": None, "known": False, "remote": an._remote(m), "seconds": None, "needs": "weights",
+                    "model": self._model_brief(m)}
+        a = self._analysis(p)
+        if a.needs != "none" and m is None:
+            raise RpcError(MODEL_NOT_FOUND, "open a model first (Analysis > Model, or anatomy.open)")
+        est = an.estimate(a, m, p.get("params") or {})
+        return {**est, "needs": a.needs, "model": self._model_brief(m)}
+
+    def analysis_run(self, p: dict) -> dict:
+        from blackhole_dev import analysis as an
+        m = self._analysis_model(p)
+        budget = p.get("budget")
+        budget = None if budget is None else int(budget)
+        self.progress("running", 0.1)
+        if p.get("path") and not p.get("name"):
+            an.refresh()
+            return an.run_file(self._path(p), m, p.get("params") or {}, budget=budget, text=p.get("text"),
+                               name=p.get("analysis"), progress=self.progress)
+        a = self._analysis(p)
+        if a.needs != "none" and m is None:
+            raise RpcError(MODEL_NOT_FOUND, "open a model first (Analysis > Model, or anatomy.open)")
+        return an.run(a, m, p.get("params") or {}, budget=budget, progress=self.progress)
+
+    def _model_brief(self, m) -> dict | None:
+        if m is None:
+            return None
+        return {"id": m.id, "path": str(m.root) if m.root else None, "name": str(m.id).rstrip("/").split("/")[-1],
+                "layers": len(m.layers), "kind": "moe" if m.info.experts else "dense"}
+
+    def _models_dirs(self, p: dict) -> list[str]:
+        return [d for d in [*(p.get("dirs") or []), self.ws.get("modelsDir")] if d]
+
+    def model_list(self, p: dict) -> dict:
+        from blackhole_dev.fork import models
+        return {"models": models(self._models_dirs(p))}
+
+    def model_fork_plan(self, p: dict) -> dict:
+        from blackhole_dev.fork import fork_plan
+        return fork_plan(self._path(p, "src"), p.get("mode") or "link")
+
+    def model_fork(self, p: dict) -> dict:
+        from blackhole_dev.fork import fork
+        out = fork(self._path(p, "src"), name=p.get("name") or None, dst=p.get("dst") or None,
+                   mode=p.get("mode") or "link", note=p.get("note") or "")
+        return out
+
+    def model_lineage(self, p: dict) -> dict:
+        from blackhole_dev.fork import lineage
+        return {"lineage": lineage(self._path(p))}
 
 
 # ---------------------------------------------------------------------- helpers
