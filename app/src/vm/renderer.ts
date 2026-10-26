@@ -86,7 +86,7 @@ export function activate(ctx: VmRendererContext): void {
 
   ctx.registerTabType({
     id: "job-monitor",
-    title: (s: MonitorState) => `⚡ ${s.job.name}`,
+    title: (s: MonitorState) => `job · ${s.job.name}`,
     render: (el, s: MonitorState) => mount(el, createElement(JobMonitor, {
       api,
       tab: s,

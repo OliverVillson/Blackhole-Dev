@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Check, Host, JobRef, LaunchPlan } from "../shared";
 import type { VmApi } from "./api";
 
-const MARK: Record<Check["tone"], string> = { ok: "✓", warn: "!", bad: "✗", info: "i" };
+const MARK: Record<Check["tone"], string> = { ok: "✓", warn: "!", bad: "✕", info: "i" };
 
 export function hostLine(h: Host): string {
   const bits = [h.kind === "vm" ? `${h.provider ?? "vm"} · ${h.state ?? ""}` : "ssh", h.gpu ? `1× ${h.gpu.toUpperCase()}` : null,

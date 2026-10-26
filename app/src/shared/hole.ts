@@ -2,7 +2,7 @@
 // TUI's art (BlackHole-Harness harness/blackhole_tui/art.py) and the landing page: shadow,
 // photon ring, a tilted accretion disk in front and its lensed far side bent over the top.
 
-import { THEME } from "../shared/theme";
+import { THEME } from "./theme";
 
 const HEAT = [THEME.ash, THEME.crimson, THEME.redshift, THEME.ember, THEME.flare, THEME.photon];
 const CUTS = [0.06, 0.16, 0.3, 0.46, 0.64, 0.82];

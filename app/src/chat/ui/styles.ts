@@ -35,7 +35,7 @@ export const CSS = `
 .bhc-scroll{flex:1;min-width:0;overflow-y:auto;padding:20px 0 12px}
 .bhc-col{max-width:820px;margin:0 auto;padding:0 20px;display:flex;flex-direction:column;gap:16px}
 .bhc-empty{margin:12vh auto 0;max-width:460px;text-align:center;color:var(--c-dim);line-height:20px}
-.bhc-empty pre{font-family:var(--f-mono);font-size:10px;line-height:10px;color:var(--c-ember);margin:0 0 16px;background:none;border:0}
+.bhc-hole{display:flex;justify-content:center;line-height:0;margin:0 0 18px}
 .bhc-empty b{color:var(--c-photon);font-family:var(--f-display);letter-spacing:.06em;font-size:16px;display:block;margin-bottom:6px}
 .bhc-user{align-self:flex-end;max-width:80%;background:#1a0703;border:1px solid #3a1206;border-radius:8px;padding:10px 12px;line-height:20px;white-space:pre-wrap;word-wrap:break-word}
 .bhc-ai{line-height:21px;word-wrap:break-word}

@@ -4,7 +4,7 @@ import { h, clear, basename } from "./dom";
 import { helper } from "./bridge";
 import { renderChecks } from "./views/settings";
 import { stepChain } from "./panels/plan";
-import { holeCanvas } from "./hole";
+import { holeCanvas } from "../shared/hole";
 import type { Shell } from "./shell";
 
 export function welcomeTab(shell: Shell): (el: HTMLElement) => void {

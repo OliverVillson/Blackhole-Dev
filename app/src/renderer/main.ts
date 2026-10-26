@@ -102,6 +102,7 @@ async function boot(): Promise<void> {
   cmd("terminal.attach", "Attach terminal", (id: string, title: string) => terms.attach(id, title));
   cmd("terminal.focus", "Focus terminal", (id: string) => terms.focus(id));
   cmd("workbench.view", "Show a sidebar view", (activityId: string) => shell.showActivity(activityId));
+  cmd("workbench.right", "Show a right-hand panel", (panelId: string) => shell.showRight(panelId));
   cmd("workspace.choose", "Choose workspace folder", () => bh.invoke("ws:chooseFolder"));
   cmd("app.welcome", "Welcome and checks", () => shell.openTab("welcome", {}));
   cmd("app.logs", "Show logs", () => shell.showPanel("output"));

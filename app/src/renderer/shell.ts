@@ -141,7 +141,7 @@ export class Shell {
 
   registerActivity(def: ActivityDef, bottom = false): void {
     if (this.activities.has(def.id)) throw new Error(`activity exists: ${def.id}`);
-    const button = h("button", { class: "ab", "aria-label": def.title, title: def.title, html: def.icon, onclick: () => this.toggleActivity(def.id) });
+    const button = h("button", { class: "ab", "aria-label": def.title, title: def.title, html: def.icon, onclick: () => (def.run ? def.run() : this.toggleActivity(def.id)) });
     button.dataset.order = String(def.order ?? 100);
     this.activities.set(def.id, { def, button });
     const box = bottom ? this.activityBottom : this.activityTop;

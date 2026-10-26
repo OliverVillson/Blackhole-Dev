@@ -167,5 +167,9 @@ button.chip { cursor: pointer; }
 /* full-tab pages */
 .page { padding: 28px 36px; display: flex; flex-direction: column; gap: 24px; max-width: 1100px; }
 .page h1 { margin: 6px 0 4px; font: 700 30px var(--font-display); color: var(--photon); letter-spacing: .02em; }
-.check { display: flex; gap: 10px; align-items: baseline; font-size: 13px; }
+.checks { container-type: inline-size; }
+.check { display: grid; grid-template-columns: 14px 170px minmax(0, 1fr); column-gap: 10px; align-items: baseline; font-size: 13px; }
+.check .meta { overflow-wrap: anywhere; }
+/* narrow (the Settings sidebar): the detail goes under its label instead of a squeezed column */
+@container (max-width: 480px) { .check { grid-template-columns: 14px minmax(0, 1fr); } .check .meta { grid-column: 2; } }
 .logo-hole { flex: none; line-height: 0; }
