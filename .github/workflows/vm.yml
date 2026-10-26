@@ -1,0 +1,42 @@
+name: vm
+# The VM module end to end over a real ssh host: sshd on the runner, a user whose venv holds the
+# stand-in pipeline (app/test/vm/fixtures). The unit and UI tests also run in app.yml.
+on:
+  push:
+    branches: [main]
+    paths: ["app/src/vm/**", "app/test/vm/**", ".github/workflows/vm.yml"]
+  pull_request:
+    paths: ["app/src/vm/**", "app/test/vm/**", ".github/workflows/vm.yml"]
+jobs:
+  ssh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - name: ssh test host
+        run: |
+          sudo apt-get install -y -q openssh-server tmux rsync >/dev/null
+          sudo useradd -m -s /bin/bash bhtest && sudo usermod -p '*' bhtest
+          ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519 -q
+          sudo install -d -m 700 -o bhtest -g bhtest /home/bhtest/.ssh
+          sudo install -m 600 -o bhtest -g bhtest ~/.ssh/id_ed25519.pub /home/bhtest/.ssh/authorized_keys
+          sudo -u bhtest python3 -m venv /home/bhtest/bh-venv
+          SP=$(sudo -u bhtest /home/bhtest/bh-venv/bin/python -c 'import site; print(site.getsitepackages()[0])')
+          sudo cp -r test/vm/fixtures/blackhole_pipeline "$SP/" && sudo chown -R bhtest "$SP/blackhole_pipeline"
+          printf '#!/bin/sh\necho "NVIDIA B300 SXM6 AC, 294912, 1024, 3"\n' | sudo tee /usr/local/bin/nvidia-smi >/dev/null
+          sudo chmod +x /usr/local/bin/nvidia-smi
+          printf 'Port 2222\nListenAddress 127.0.0.1\nPasswordAuthentication no\nUsePAM no\nPidFile /tmp/sshd.pid\n' > /tmp/sshd_config
+          sudo mkdir -p /run/sshd && sudo /usr/sbin/sshd -f /tmp/sshd_config
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -p 2222 bhtest@127.0.0.1 true
+      - run: npx vitest run test/vm
+        env:
+          BHD_TEST_SSH: bhtest@127.0.0.1:2222

@@ -75,6 +75,22 @@ def handle(method, params):
             ],
             "sizeGb": 9.8, "fits": True, "kvGb": 1.5, "estHours": 3.0, "problems": problems, "steps": steps_of(text, params["path"]),
         }
+    if method == "recipe.bundle":
+        # a real .bhr (gzip tar: manifest.json + recipe.py) so the VM module can send and check it
+        import hashlib, io, tarfile, tempfile, time
+        name = os.path.basename(params["path"]).rsplit(".", 1)[0]
+        stages = ["detect", "plan", "weights", "calibrate", "score", "prune", "eval", "heal", "mlx", "qheal", "bench", "package"]
+        manifest = {"format": "bhr/1", "name": name, "id": "blackhole/" + name, "version": "1.0.0", "base_model": "Qwen/Qwen3-30B-A3B",
+                    "target": "mac16", "runner": "pipeline", "stages": stages, "inputs": {"speed": float(os.environ.get("FAKE_SPEED", "0.3"))},
+                    "needs": {"gpu_gb": 160, "disk_gb": 20}, "blackhole_dev_version": "0.1.0", "files": {}, "functions": []}
+        out = os.path.join(tempfile.gettempdir(), f"{name}-{int(time.time() * 1000)}.bhr")
+        with tarfile.open(out, "w:gz") as t:
+            for fname, data in (("manifest.json", json.dumps(manifest).encode()), ("recipe.py", open(params["path"], "rb").read())):
+                info = tarfile.TarInfo(fname)
+                info.size = len(data)
+                t.addfile(info, io.BytesIO(data))
+        sha = hashlib.sha256(open(out, "rb").read()).hexdigest()
+        return {"bundle": out, "sha256": sha, "functions": [], "manifest": manifest}
     if method == "functions.list":
         return [{"name": n, "per": p, "origin": "builtin", "path": "builtin/" + n, "doc": d} for n, p, d in BUILTINS]
     if method == "functions.source":

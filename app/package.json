@@ -18,6 +18,7 @@
     "postinstall": "electron-builder install-app-deps || echo 'node-pty rebuild skipped: the terminal falls back to plain pipes'"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
