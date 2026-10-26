@@ -16,10 +16,12 @@ schemas call from a `model.edit` stage. The open format code (safetensors IO, HE
 blackhole-harness package as blackhole.anatomy.{st,hex,formats}. Full guide: docs/anatomy.md.
 """
 
+__version__ = "0.1.0"
+
 from blackhole_dev.functions import call, describe, function, get, load, registry
 from blackhole_dev.model import AnatomyError, Model, Plan, diff, open
 from blackhole_dev.parts import Part, Selection, View
 from blackhole_dev.query import QueryError
 
-__all__ = ["open", "Model", "Plan", "Part", "Selection", "View", "AnatomyError", "QueryError", "diff",
+__all__ = ["__version__", "open", "Model", "Plan", "Part", "Selection", "View", "AnatomyError", "QueryError", "diff",
            "function", "call", "get", "load", "describe", "registry"]
