@@ -42,7 +42,7 @@ describe("FenceSplitter", () => {
   });
 
   it("parses info strings", () => {
-    expect(parseFenceInfo("python path=a.py mode=append")).toEqual({ lang: "python", path: "a.py", mode: "append" });
+    expect(parseFenceInfo("python path=a.py mode=append")).toEqual({ lang: "python", path: "a.py", mode: "append", modeSet: true });
     expect(parseFenceInfo("python")).toEqual({ lang: "python", mode: "new" });
   });
 });

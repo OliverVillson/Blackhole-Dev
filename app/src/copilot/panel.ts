@@ -3,6 +3,9 @@
 // conversation with tool rows and "you changed …" notes, and the steer box.
 import { ANTHROPIC_MODELS, CLAUDE_CODE_MODELS, EFFORTS, LOCAL_PRESETS, anthropicModel, claudeCodeModel } from "../llm/catalog";
 import type { ClaudeCodeStatus } from "../llm/claudeCode";
+// Same Markdown and highlighter as the chat tab; both escape all model text.
+import { highlight } from "../chat/ui/highlight";
+import { escapeHtml, renderMarkdown } from "../chat/ui/markdown";
 import type { Effort } from "../llm/types";
 import type { KeyStatus, ProviderSettings } from "./main";
 import type { CopilotEvent, CopilotSession, CopilotState } from "./session";
@@ -33,7 +36,31 @@ const CSS = `
 .cp-log{flex:1;min-height:0;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
 .cp-me{align-self:flex-end;max-width:85%;background:#1a0703;border:1px solid #3a1206;border-radius:8px;padding:8px 12px;white-space:pre-wrap}
 .cp-me.steer{border-color:var(--flare)}
-.cp-ai{white-space:pre-wrap;color:var(--photon)}
+.cp-log>*{flex:none}
+.cp-ai{color:var(--photon);line-height:20px;overflow-wrap:anywhere;min-width:0}
+.cp-ai p{margin:0 0 8px}.cp-ai p:last-child{margin-bottom:0}
+.cp-ai ul,.cp-ai ol{margin:0 0 8px;padding-left:20px}
+.cp-ai h3,.cp-ai h4,.cp-ai h5,.cp-ai h6{margin:4px 0 6px;font:600 13px var(--font-display);letter-spacing:.04em;color:var(--photon)}
+.cp-ai a{color:var(--flare)}
+.cp-ai code{font:12px var(--font-mono);background:#2a0c04;border:1px solid #5a1a08;border-radius:3px;padding:0 4px;color:#ffc46b}
+.cp .bhc-code,.cp-box{margin:0 0 8px;border:1px solid #3a1206;border-left:3px solid var(--ember);border-radius:6px;background:#030100;overflow:hidden;min-width:0}
+.cp .bhc-code:last-child,.cp-box:last-child{margin-bottom:0}
+.cp .bhc-code-hd,.cp-box-hd{display:flex;align-items:center;gap:8px;height:26px;padding:0 6px 0 10px;background:#120502;border-bottom:1px solid #2b0d05;font:600 10.5px var(--font-mono);letter-spacing:.08em;color:var(--ember)}
+.cp .bhc-code-hd{justify-content:space-between;text-transform:uppercase}
+.cp-box-hd .path{color:var(--photon);letter-spacing:0;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.cp-box-hd .tag{text-transform:uppercase;color:var(--ember)}
+.cp-box-hd .st{font:500 11px var(--font-ui);letter-spacing:0;color:var(--dim);white-space:nowrap}
+.cp-box.writing .st{color:var(--flare)}
+.cp-box.stopped{border-left-color:var(--redshift)}
+.cp .bhc-copy,.cp-copy{height:20px;padding:0 8px;border:1px solid transparent;border-radius:3px;background:none;color:var(--dim);font:500 11px var(--font-ui);letter-spacing:0;text-transform:none;cursor:pointer;flex:none}
+.cp .bhc-copy:hover,.cp-copy:hover{border-color:var(--ash);color:var(--photon)}
+.cp pre{margin:0;padding:8px 12px;overflow:auto;max-height:340px;background:none;font:12px/18px var(--font-mono);color:#f3e3d3;white-space:pre;tab-size:4}
+.cp pre code{font:inherit;background:none;border:0;padding:0;color:inherit}
+.cp .d-del{color:#ff7d6e;background:rgba(215,38,30,.12);display:block}
+.cp .d-add{color:#ffd9a0;background:rgba(255,174,66,.10);display:block}
+.cp .t-kw{color:#ff7a1a;font-weight:600}.cp .t-str{color:#ffd27a}.cp .t-key{color:#ffb070}
+.cp .t-num,.cp .t-lit{color:#ff5a45}.cp .t-lit{font-weight:600}.cp .t-com{color:#8a5e48;font-style:italic}
+.cp .t-fn{color:#fff6ea;font-weight:600}.cp .t-type{color:#ffae42}.cp .t-deco{color:#ff9a3c}.cp .t-op{color:#e2452f}
 .cp-think{font-size:12px;color:var(--dim);font-style:italic}
 .cp-tool{font:12px var(--font-mono);border:1px solid var(--line2);border-radius:5px;padding:6px 10px;background:var(--bg1);color:var(--dim)}
 .cp-tool.ok::before{content:"✓ ";color:var(--flare)}
@@ -180,11 +207,19 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
   // ---- state ----
   let settings: ProviderSettings | null = null;
   let aiEl: HTMLElement | null = null;
+  let aiText = "";
+  /** Code boxes for files being written, by path. */
+  const boxes = new Map<string, { el: HTMLElement; code: HTMLElement; st: HTMLElement; text: string; lang: string }>();
   let thinkEl: HTMLElement | null = null;
   const toolEls = new Map<string, HTMLElement>();
   let writingFile = "";
 
-  const scroll = () => (log.scrollTop = log.scrollHeight);
+  // Follow the stream only while the user is at the bottom; scrolling up to read stops it.
+  let follow = true;
+  log.addEventListener("scroll", () => (follow = log.scrollHeight - log.scrollTop - log.clientHeight < 48));
+  const scroll = () => {
+    if (follow) log.scrollTop = log.scrollHeight;
+  };
   const add = (e: HTMLElement) => {
     log.append(e);
     scroll();
@@ -220,24 +255,58 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
         if (e.state !== "thinking") thinkEl = null;
         break;
       case "user-message":
+        follow = true;
         aiEl = null;
         thinkEl = null;
         add(h("div", { class: e.steer ? "cp-me steer" : "cp-me" }, e.text));
         break;
       case "prose":
         if (!e.text.trim() && !aiEl) break;
-        if (!aiEl) aiEl = add(h("div", { class: "cp-ai" }));
-        aiEl.textContent += e.text;
+        if (!aiEl) {
+          aiEl = add(h("div", { class: "cp-ai" }));
+          aiText = "";
+        }
+        aiText += e.text;
+        aiEl.innerHTML = renderMarkdown(aiText); // renderMarkdown escapes all model text
         scroll();
         break;
       case "reasoning":
         if (!thinkEl) thinkEl = add(h("div", { class: "cp-think" }, "Thinking… "));
         break;
-      case "write":
+      case "write": {
         aiEl = null;
-        if (e.status === "start") add(h("div", { class: "cp-tool running" }, `writing ${e.file}`));
-        else add(h("div", { class: e.status === "done" ? "cp-tool ok" : "cp-tool error" }, `${e.status === "done" ? "wrote" : "stopped writing"} ${e.file}`));
+        if (e.status === "start") {
+          const lang = e.lang || langOf(e.file);
+          const b = codeBox(lang, e.file, e.mode === "new" ? "writing…" : e.mode === "rewrite" ? "rewriting…" : "continuing…");
+          b.el.classList.add("writing");
+          boxes.set(e.file, { ...b, text: "", lang });
+          add(b.el);
+          break;
+        }
+        const b = boxes.get(e.file);
+        if (!b) break;
+        b.el.classList.remove("writing");
+        b.el.classList.toggle("stopped", e.status === "stopped");
+        b.st.textContent = e.status === "done" ? "written · pending your accept" : "stopped";
+        boxes.delete(e.file);
         break;
+      }
+      case "code": {
+        const b = boxes.get(e.file);
+        if (!b) break;
+        b.text += e.text;
+        b.code.innerHTML = highlight(b.text, b.lang);
+        scroll();
+        break;
+      }
+      case "edit": {
+        aiEl = null;
+        const b = codeBox("edit", e.file, `${e.edits.length} change${e.edits.length === 1 ? "" : "s"} · pending your accept`);
+        const lines = (s: string, cls: string, mark: string) => s.split("\n").map((l) => `<span class="${cls}">${mark} ${escapeHtml(l)}</span>`).join("");
+        b.code.innerHTML = e.edits.map((x) => lines(x.find, "d-del", "-") + lines(x.replace, "d-add", "+")).join("");
+        add(b.el);
+        break;
+      }
       case "tool": {
         aiEl = null;
         let t = toolEls.get(e.id);
@@ -265,6 +334,33 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
     }
   }
 
+  function codeBox(tag: string, file: string, status: string) {
+    const el = h("div", { class: "cp-box" });
+    const hdr = h("div", { class: "cp-box-hd" });
+    const st = h("span", { class: "st" }, status);
+    hdr.append(h("span", { class: "tag" }, tag), h("span", { class: "path", title: file }, file), st, h("button", { class: "cp-copy", type: "button" }, "Copy"));
+    const pre = h("pre");
+    const code = h("code");
+    pre.append(code);
+    el.append(hdr, pre);
+    return { el, code, st };
+  }
+
+  // Copy buttons on code boxes (written files, edits, and code in replies).
+  log.addEventListener("click", (ev) => {
+    const btn = (ev.target as HTMLElement).closest<HTMLButtonElement>(".cp-copy, .bhc-copy");
+    const box = btn?.closest(".cp-box, .bhc-code");
+    if (!btn || !box) return;
+    const pre = box.querySelector("pre")!;
+    // An edit box copies only the replacement text.
+    const added = [...pre.querySelectorAll(".d-add")];
+    const text = added.length ? added.map((l) => l.textContent!.slice(2)).join("\n") : pre.textContent ?? "";
+    void navigator.clipboard?.writeText(text).then(() => {
+      btn.textContent = "Copied";
+      setTimeout(() => (btn.textContent = "Copy"), 1200);
+    });
+  });
+
   // ---- provider settings ----
   const isLocal = () => prov.value.startsWith("local:");
   const isClaudeCode = () => prov.value.startsWith("claude-code:");
@@ -283,6 +379,9 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
     ccCheck.disabled = false;
     ccMsg.className = `cp-ccmsg ${ccStatus!.loggedIn ? "ok" : "bad"}`;
     ccMsg.textContent = ccStatus!.message;
+    // The long explanation only matters until it works; then it stays as a tooltip.
+    ccHelp.style.display = ccStatus!.loggedIn ? "none" : "";
+    ccMsg.title = ccHelp.textContent ?? "";
     testBtn.disabled = !ccStatus!.loggedIn;
     return ccStatus;
   }
@@ -480,4 +579,9 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
 /** Focus the ask box (Cmd+I). */
 export function focusCopilot(el: HTMLElement): void {
   el.querySelector<HTMLTextAreaElement>("#cp-steer")?.focus();
+}
+
+function langOf(file: string): string {
+  const ext = file.split(".").pop()?.toLowerCase() ?? "";
+  return ({ py: "python", ts: "ts", js: "js", toml: "toml", json: "json", sh: "sh", md: "md", yaml: "yaml", yml: "yaml" } as Record<string, string>)[ext] ?? ext;
 }
