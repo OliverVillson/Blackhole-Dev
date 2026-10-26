@@ -15,8 +15,8 @@ from blackhole_dev.functions import function
 
 
 @function("bench", per="job")
-def bench(job, release: str = "v6", models: str = "original,mlx", limit: int = 0, max_tokens: int = 65536,
-          budgets: str = "8192,16384,32768", file: str = "", rerun: bool = False) -> dict:
+def bench(job, release: str = None, models: str = None, limit: int = None, max_tokens: int = None,
+          budgets: str = None, file: str = None, rerun: bool = False) -> dict:
     """LiveCodeBench pass@1 (Python-only prompt, verbatim) of the models named in `models`: any
     of original, pruned, healed, int4, reaq, mlx, or a folder path. One sample per problem, up
     to `max_tokens` (reasoning models think for tens of thousands of tokens), the problems new
@@ -24,9 +24,25 @@ def bench(job, release: str = "v6", models: str = "original,mlx", limit: int = 0
     first n). `budgets` also scores thinking budgets by budget forcing (vLLM only; "" = none).
     Each model runs in its own process so the GPU is free between them; a result whose model
     folder and settings did not change is reused (the original once per model and settings,
-    across jobs). Writes work/bench.json; the package step puts it on the model card."""
+    across jobs). Writes work/bench.json; the package step puts it on the model card.
+
+    None takes the pipeline's bench knobs (bench "lcb-v6", bench_models, bench_limit,
+    bench_max_tokens, bench_budgets, bench_file), so this runs exactly what the pipeline's own
+    bench stage would; bench = "none" there (and no release here) skips it."""
     from blackhole_pipeline import bench as lcb
     from blackhole_tui.jobs import home
+
+    p = job.params
+    if release is None:
+        if p.get("bench", "lcb-v6") in ("", "none"):
+            job.emit(pct=100, msg="bench: none")
+            return {"skipped": 1}
+        release = p["bench"].split("-")[-1] if str(p.get("bench", "")).startswith("lcb") else "v6"
+    models = p.get("bench_models", "original,reaq") if models is None else models
+    limit = p.get("bench_limit", 0) if limit is None else limit
+    max_tokens = p.get("bench_max_tokens", 32768) if max_tokens is None else max_tokens
+    budgets = p.get("bench_budgets", "") if budgets is None else budgets
+    file = p.get("bench_file", "") if file is None else file
 
     dirs = {"original": job.model_dir, "pruned": job.pruned_dir, "healed": job.healed_dir, "int4": job.gptq_dir,
             "reaq": job.reaq_dir, "mlx": job.mlx_dir}
