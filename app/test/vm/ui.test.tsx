@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { emptyState, parseLine, reduce } from "../events";
-import type { JobUpdate, LaunchPlan } from "../shared";
-import { JobMonitor } from "../ui/JobMonitor";
-import { RunOnVm } from "../ui/RunOnVm";
+import { emptyState, parseLine, reduce } from "../../src/vm/events";
+import type { JobUpdate, LaunchPlan } from "../../src/vm/shared";
+import { JobMonitor } from "../../src/vm/ui/JobMonitor";
+import { RunOnVm } from "../../src/vm/ui/RunOnVm";
 
 afterEach(cleanup);
 const host = { id: "ssh:b300", label: "b300", kind: "ssh" as const, target: "u@b300", source: "ssh-config" as const, ratePerHour: 6.1, currency: "$" };

@@ -6,12 +6,12 @@ import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import type { ConfirmRequest } from "../ctx";
-import { HostStore } from "../hosts";
-import { JobsService, sha256File } from "../jobs";
-import type { JobUpdate } from "../shared";
-import { CH } from "../shared";
-import { OpenSsh } from "../ssh";
+import type { ConfirmRequest } from "../../src/vm/ctx";
+import { HostStore } from "../../src/vm/hosts";
+import { JobsService, sha256File } from "../../src/vm/jobs";
+import type { JobUpdate } from "../../src/vm/shared";
+import { CH } from "../../src/vm/shared";
+import { OpenSsh } from "../../src/vm/ssh";
 
 const SPEC = process.env.BHD_TEST_SSH;
 

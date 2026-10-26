@@ -18,7 +18,7 @@ function shippedWheel(): { path: string; version: string } | null {
   return w && v ? { path: join(dir, w), version: v } : null;
 }
 
-export async function activate(ctx: VmMainContext): Promise<JobsService> {
+export async function activate(ctx: VmMainContext): Promise<{ deactivate(): void }> {
   const electron = await import("electron").catch(() => null);
   const python = () => ctx.settings.get<string>("python.path", "") || join(process.resourcesPath ?? "", "python/bin/python3");
   const jobs = new JobsService({
@@ -74,6 +74,5 @@ export async function activate(ctx: VmMainContext): Promise<JobsService> {
   ctx.handle(CH.copilotLaunch, (a: { recipe: string; host?: string; why?: string }) => jobs.copilotLaunch(a));
 
   jobs.resumeWatches();
-  electron?.app?.on("before-quit", () => jobs.dispose());
-  return jobs;
+  return { deactivate: () => jobs.dispose() };
 }

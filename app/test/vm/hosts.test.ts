@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { HostStore, machineHosts, parseSshConfig, parseTarget, sshConfigHosts } from "../hosts";
+import { HostStore, machineHosts, parseSshConfig, parseTarget, sshConfigHosts } from "../../src/vm/hosts";
 
 describe("ssh config", () => {
   it("lists concrete hosts with their first values", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyState, klPoint, LineSplitter, parseLine, reduce, summary } from "../events";
+import { emptyState, klPoint, LineSplitter, parseLine, reduce, summary } from "../../src/vm/events";
 
 const ev = (o: object) => JSON.stringify(o);
 

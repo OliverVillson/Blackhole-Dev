@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import * as cloud from "../cloud";
+import * as cloud from "../../src/vm/cloud";
 
 // Output as blackhole.cloud.cli prints it (Offer.line(), up(), down())
 function fake(outputs: Record<string, { code: number; out: string }>) {

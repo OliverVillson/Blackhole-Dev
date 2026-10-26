@@ -1,9 +1,9 @@
 // The confirm gate sits in main, in front of every action that costs money, whoever calls.
 import { describe, expect, it } from "vitest";
-import type { ConfirmRequest } from "../ctx";
-import { HostStore } from "../hosts";
-import { JobsService } from "../jobs";
-import type { Remote } from "../ssh";
+import type { ConfirmRequest } from "../../src/vm/ctx";
+import { HostStore } from "../../src/vm/hosts";
+import { JobsService } from "../../src/vm/jobs";
+import type { Remote } from "../../src/vm/ssh";
 
 function make(approve: boolean) {
   const store = new Map<string, unknown>();

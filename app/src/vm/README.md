@@ -46,6 +46,6 @@ Machines, Run on VM, the job monitor and the jobs API (I6). Main side in `main.t
 
 ## Tests
 
-`npx vitest run src/vm` runs the unit and UI tests. The end-to-end tests run against a real ssh
+`npm test` runs the unit and UI tests (`test/vm/`). The end-to-end tests run against a real ssh
 host with a stand-in `blackhole_pipeline` when `BHD_TEST_SSH=user@host:port` is set (they make job
-folders under that user's `~/.blackhole/jobs`).
+folders under that user's `~/.blackhole/jobs`); `test/vm/fixtures/` has the stand-in and how to set it up.

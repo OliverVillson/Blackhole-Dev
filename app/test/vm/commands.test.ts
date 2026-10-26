@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import * as cmd from "../remote/commands";
+import * as cmd from "../../src/vm/remote/commands";
 
 const sh = (script: string) => execFileSync("sh", ["-c", script], { encoding: "utf8" });
 
