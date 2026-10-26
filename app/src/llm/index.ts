@@ -5,7 +5,7 @@ import type { ChatRequest, LlmChunk } from "./types";
 
 export * from "./types";
 export * from "./catalog";
-export { testAnthropicKey } from "./anthropic";
+export { testAnthropicConnection, testAnthropicKey, type ConnectionReport } from "./anthropic";
 export { listModels, probe } from "./openaiCompat";
 
 export function chat(req: ChatRequest): AsyncIterable<LlmChunk> {

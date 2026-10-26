@@ -1,6 +1,6 @@
 // Anthropic provider: the user's own API key (from the macOS Keychain, read in main).
 import Anthropic from "@anthropic-ai/sdk";
-import { DEFAULT_ANTHROPIC_MODEL } from "./catalog";
+import { DEFAULT_ANTHROPIC_MODEL, anthropicModel } from "./catalog";
 import type { ChatRequest, LlmBlock, LlmChunk, LlmMessage, Provider } from "./types";
 
 // Server-side refusal fallback, routed by refusal category.
@@ -40,10 +40,10 @@ export function toAnthropicMessages(messages: LlmMessage[]): Anthropic.Beta.Beta
 
 function errorChunk(err: unknown): LlmChunk {
   if (err instanceof Anthropic.AuthenticationError) {
-    return { type: "error", message: "Anthropic rejected the API key. Check it in Settings › Copilot.", retryable: false, status: 401 };
+    return { type: "error", message: "Anthropic rejected the API key. Paste a new one in the Copilot panel.", retryable: false, status: 401 };
   }
   if (err instanceof Anthropic.PermissionDeniedError) {
-    return { type: "error", message: "This API key cannot use that model.", retryable: false, status: 403 };
+    return { type: "error", message: "This API key cannot use that model. Pick another model or check your Console workspace.", retryable: false, status: 403 };
   }
   if (err instanceof Anthropic.NotFoundError) {
     return { type: "error", message: "Model not found.", retryable: false, status: 404 };
@@ -68,7 +68,7 @@ function errorChunk(err: unknown): LlmChunk {
 export const anthropicProvider: Provider = {
   async *chat(req: ChatRequest): AsyncIterable<LlmChunk> {
     if (!req.apiKey) {
-      yield { type: "error", message: "No Anthropic API key. Add yours in Settings › Copilot.", retryable: false };
+      yield { type: "error", message: "No Anthropic API key yet. Paste yours at the top of the Copilot panel.", retryable: false };
       return;
     }
     const client = makeClient(req.apiKey);
@@ -80,11 +80,12 @@ export const anthropicProvider: Provider = {
       eager_input_streaming: true,
     }));
 
+    const model = req.model || DEFAULT_ANTHROPIC_MODEL;
     let stream: ReturnType<typeof client.beta.messages.stream> | undefined;
     try {
       stream = client.beta.messages.stream(
         {
-          model: req.model || DEFAULT_ANTHROPIC_MODEL,
+          model,
           max_tokens: p.max_tokens ?? 64000,
           // Stable system prompt first so the prefix caches across turns.
           system: req.system ? [{ type: "text", text: req.system, cache_control: { type: "ephemeral" } }] : undefined,
@@ -92,8 +93,8 @@ export const anthropicProvider: Provider = {
           tools,
           thinking: { type: "adaptive", display: "summarized" },
           output_config: { effort: p.effort ?? "high" },
-          betas: [FALLBACK_BETA],
-          fallbacks: "default",
+          // Refusal fallback where the model has one (not Haiku).
+          ...(anthropicModel(model)?.fallback === false ? {} : { betas: [FALLBACK_BETA], fallbacks: "default" as const }),
         },
         { signal: req.signal },
       );
@@ -138,13 +139,44 @@ export const anthropicProvider: Provider = {
   },
 };
 
-/** Cheap key check for the settings screen (1 output token). */
-export async function testAnthropicKey(apiKey: string): Promise<{ ok: boolean; message: string }> {
+/** Free key check (GET /v1/models/{id}): proves the key and that it can see the model. */
+export async function testAnthropicKey(apiKey: string, model = DEFAULT_ANTHROPIC_MODEL): Promise<{ ok: boolean; message: string; retryable?: boolean }> {
   try {
-    await makeClient(apiKey).models.retrieve(DEFAULT_ANTHROPIC_MODEL);
+    await makeClient(apiKey).models.retrieve(model);
     return { ok: true, message: "Key works." };
   } catch (err) {
     const c = errorChunk(err);
-    return { ok: false, message: c.type === "error" ? c.message : "Key check failed." };
+    return c.type === "error" ? { ok: false, message: c.message, retryable: c.retryable } : { ok: false, message: "Key check failed." };
+  }
+}
+
+export interface ConnectionReport {
+  ok: boolean;
+  message: string;
+  model?: string;
+  latencyMs?: number;
+}
+
+/** "Test connection": the key check, then one tiny real request (low effort, a few output tokens,
+ *  well under a cent) so billing, rate limits and model access all show up here, not mid-recipe. */
+export async function testAnthropicConnection(apiKey: string, model = DEFAULT_ANTHROPIC_MODEL, signal?: AbortSignal): Promise<ConnectionReport> {
+  const key = await testAnthropicKey(apiKey, model);
+  if (!key.ok) return { ok: false, message: key.message };
+  const t0 = Date.now();
+  try {
+    const msg = await makeClient(apiKey).messages.create(
+      {
+        model,
+        max_tokens: 64,
+        output_config: { effort: "low" },
+        messages: [{ role: "user", content: "Reply with the single word: ready" }],
+      },
+      { signal, timeout: 60_000, maxRetries: 0 },
+    );
+    const label = anthropicModel(msg.model)?.label ?? msg.model;
+    return { ok: true, message: `Connected to ${label} in ${((Date.now() - t0) / 1000).toFixed(1)} s.`, model: msg.model, latencyMs: Date.now() - t0 };
+  } catch (err) {
+    const c = errorChunk(err);
+    return { ok: false, message: c.type === "error" ? c.message : "Test request failed." };
   }
 }

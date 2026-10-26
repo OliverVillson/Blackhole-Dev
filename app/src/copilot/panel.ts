@@ -1,8 +1,9 @@
 // Copilot side panel (plain DOM, like the shell). Layout follows the "copilot streaming"
 // sketch: provider picker, control bar (Pause / Stop / Reject all / Accept all), the
 // conversation with tool rows and "you changed …" notes, and the steer box.
-import { ANTHROPIC_MODELS, LOCAL_PRESETS } from "../llm/catalog";
-import type { ProviderSettings } from "./main";
+import { ANTHROPIC_MODELS, EFFORTS, LOCAL_PRESETS, anthropicModel } from "../llm/catalog";
+import type { Effort } from "../llm/types";
+import type { KeyStatus, ProviderSettings } from "./main";
 import type { CopilotEvent, CopilotSession, CopilotState } from "./session";
 
 export interface PanelDeps {
@@ -47,9 +48,22 @@ const CSS = `
 .cp-ft textarea{resize:none;background:var(--void);color:var(--text);border:1px solid #3a1206;border-radius:6px;padding:8px 10px;font:13px var(--font-ui)}
 .cp-ft textarea:focus,.cp input:focus,.cp select:focus{outline:1px solid var(--ember)}
 .cp-note{font-size:11px;color:var(--dim);margin-right:auto}
-.cp-key{display:none;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--ash);border-radius:6px;background:var(--bg1)}
+.cp-key{display:none;flex-direction:column;gap:6px}
 .cp-key.on{display:flex}
 .cp-key p{margin:0;font-size:12px;color:var(--dim)}
+.cp-keyform{display:none;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--ash);border-radius:6px;background:var(--bg1)}
+.cp-key.edit .cp-keyform{display:flex}
+.cp-key.edit .cp-keyname,.cp-key.edit>.cp-row>.cp-btn{display:none}
+.cp-keyname{font:11px var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1;color:var(--dim);margin-right:auto}
+.cp-keyname b{color:var(--text);font-weight:500}
+.cp-btn.sm{height:24px;padding:0 8px;font-size:11px}
+.cp-blurb{font-size:11px;color:var(--dim);margin-top:-4px}
+.cp-testmsg{font-size:12px;color:var(--dim);flex:1;min-width:0}
+.cp-testmsg.ok{color:var(--flare)}
+.cp-testmsg.bad{color:var(--redshift)}
+.cp-conn{width:8px;height:8px;border-radius:50%;background:var(--line2)}
+.cp-conn.ok{background:var(--flare)}
+.cp-conn.bad{background:var(--redshift)}
 `;
 
 const STATE_TEXT: Record<CopilotState, string> = {
@@ -74,16 +88,23 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
   const root = h("div", { class: "cp" });
   el.append(style, root);
 
-  // Header: provider picker and context chips
+  // Header: model + effort picker, API key, test connection, context chips
   const hd = h("div", { class: "cp-hd" });
   const top = h("div", { class: "cp-row" });
-  top.append(h("span", { class: "cp-title" }, "Copilot"));
-  const provLabel = h("label", { class: "cp-row", style: "font-size:12px;color:var(--dim)" }, "Model ");
-  const prov = h("select", { "aria-label": "Copilot model" });
-  for (const m of ANTHROPIC_MODELS) prov.append(h("option", { value: `anthropic:${m.id}` }, `${m.label} · your API key`));
-  for (const [id, p] of Object.entries(LOCAL_PRESETS)) prov.append(h("option", { value: `local:${id}` }, `Local · ${p.label} ${new URL(p.baseUrl).port ? ":" + new URL(p.baseUrl).port : ""}`));
-  provLabel.append(prov);
-  top.append(provLabel);
+  const conn = h("span", { class: "cp-conn", title: "Not tested yet" });
+  top.append(h("span", { class: "cp-title" }, "Copilot"), conn);
+
+  const pick = h("div", { class: "cp-row" });
+  const prov = h("select", { "aria-label": "Copilot model", style: "flex:1" });
+  const claudeGroup = h("optgroup", { label: "Claude · your API key" });
+  for (const m of ANTHROPIC_MODELS) claudeGroup.append(h("option", { value: `anthropic:${m.id}` }, m.label));
+  const localGroup = h("optgroup", { label: "Local server · free" });
+  for (const [id, p] of Object.entries(LOCAL_PRESETS)) localGroup.append(h("option", { value: `local:${id}` }, `${p.label} :${new URL(p.baseUrl).port}`));
+  prov.append(claudeGroup, localGroup);
+  const effort = h("select", { "aria-label": "Effort", title: "Effort: how hard the model thinks. Higher is slower and uses more tokens." });
+  for (const e of EFFORTS) effort.append(h("option", { value: e.id }, e.label));
+  pick.append(prov, effort);
+  const blurb = h("div", { class: "cp-blurb" });
 
   const local = h("div", { class: "cp-row", style: "display:none" });
   const baseUrl = h("input", { "aria-label": "Local server URL", style: "flex:1" });
@@ -91,17 +112,30 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
   const probeBtn = h("button", { class: "cp-btn" }, "Connect");
   local.append(baseUrl, localModel, probeBtn);
 
+  // API key: saved state (hint + Change / Remove) or the entry form.
   const key = h("div", { class: "cp-key" });
-  key.append(h("p", {}, "Paste your own Anthropic API key. It is stored in the macOS Keychain and only used from this Mac; BlackHole-Dev never bills you."));
+  const keySaved = h("div", { class: "cp-row" });
+  const keyLabel = h("span", { class: "cp-keyname", title: "Encrypted with your macOS Keychain; the key never leaves the main process except to call Anthropic." });
+  const keyChange = h("button", { class: "cp-btn sm" }, "Change");
+  const keyRemove = h("button", { class: "cp-btn sm" }, "Remove");
+  keySaved.append(keyLabel, keyChange, keyRemove);
+  const keyForm = h("div", { class: "cp-keyform" });
+  const keyHelp = h("p", {}, "Paste your own Anthropic API key (Console › API keys). It is encrypted with your Mac user's Keychain, only this app on this account can read it, and BlackHole-Dev never bills you.");
   const keyRow = h("div", { class: "cp-row" });
-  const keyIn = h("input", { type: "password", "aria-label": "Anthropic API key", placeholder: "sk-ant-…", style: "flex:1" });
-  const keySave = h("button", { class: "cp-btn pri" }, "Save to Keychain");
-  keyRow.append(keyIn, keySave);
-  const keyMsg = h("p");
-  key.append(keyRow, keyMsg);
+  const keyIn = h("input", { type: "password", "aria-label": "Anthropic API key", placeholder: "sk-ant-…", autocomplete: "off", spellcheck: "false", style: "flex:1" });
+  const keySave = h("button", { class: "cp-btn pri" }, "Save");
+  const keyCancel = h("button", { class: "cp-btn" }, "Cancel");
+  keyRow.append(keyIn, keySave, keyCancel);
+  keyForm.append(keyHelp, keyRow);
+  key.append(keySaved, keyForm);
+
+  const testRow = h("div", { class: "cp-row" });
+  const testBtn = h("button", { class: "cp-btn sm" }, "Test connection");
+  const testMsg = h("span", { class: "cp-testmsg", role: "status" });
+  testRow.append(testBtn, testMsg);
 
   const chips = h("div", { class: "cp-row" });
-  hd.append(top, local, key, chips);
+  hd.append(top, pick, blurb, local, key, testRow, chips);
 
   // Control bar
   const bar = h("div", { class: "cp-bar", role: "status" });
@@ -215,11 +249,23 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
   }
 
   // ---- provider settings ----
+  const isLocal = () => prov.value.startsWith("local:");
+  let keyEditing = false;
+
+  function setConn(state: "ok" | "bad" | "", msg: string) {
+    conn.className = state ? `cp-conn ${state}` : "cp-conn";
+    conn.title = msg || "Not tested yet";
+    testMsg.className = state ? `cp-testmsg ${state}` : "cp-testmsg";
+    testMsg.textContent = msg;
+  }
+
   async function loadSettings() {
     settings = await deps.invoke("copilot:settings");
     if (!settings) return;
-    if (settings.provider === "anthropic") prov.value = `anthropic:${settings.model}`;
-    else {
+    if (settings.provider === "anthropic") {
+      prov.value = `anthropic:${settings.model}`;
+      effort.value = settings.effort;
+    } else {
       prov.value = settings.preset === "custom" ? "local:mlx" : `local:${settings.preset}`;
       baseUrl.value = settings.baseUrl;
       localModel.replaceChildren(h("option", { value: settings.model }, settings.model || "(pick a model)"));
@@ -228,19 +274,40 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
   }
 
   async function syncProviderUi() {
-    const isLocal = prov.value.startsWith("local:");
-    local.style.display = isLocal ? "flex" : "none";
-    key.classList.toggle("on", !isLocal && !(await deps.invoke("copilot:hasKey")));
+    const loc = isLocal();
+    local.style.display = loc ? "flex" : "none";
+    effort.style.display = loc ? "none" : "";
+    const info = loc ? null : anthropicModel(prov.value.split(":")[1]);
+    blurb.textContent = loc ? "Runs on this Mac through an OpenAI-compatible server. No key, no cost." : info?.blurb ?? "";
+    key.classList.toggle("on", !loc);
+    testBtn.disabled = false;
+    if (loc) return;
+    const st: KeyStatus = await deps.invoke("copilot:keyStatus");
+    keyLabel.replaceChildren(
+      document.createTextNode("Key "),
+      h("b", {}, st.has ? st.hint ?? "saved" : "not set"),
+      document.createTextNode(st.has ? " · Keychain" : ""),
+    );
+    keyRemove.style.display = st.has ? "" : "none";
+    keyChange.textContent = st.has ? "Change" : "Add key";
+    keyCancel.style.display = st.has ? "" : "none";
+    if (!st.encryption) keyHelp.textContent = "This Mac cannot encrypt secrets right now (Keychain locked or unavailable), so the key cannot be saved. Unlock the Keychain and reopen the app.";
+    key.classList.toggle("edit", keyEditing || !st.has);
+    testBtn.disabled = !st.has;
   }
 
   async function saveSettings(s: ProviderSettings) {
     settings = await deps.invoke("copilot:setSettings", s);
+    setConn("", "");
   }
 
   prov.addEventListener("change", async () => {
     const [kind, id] = prov.value.split(":");
     if (kind === "anthropic") {
-      await saveSettings({ provider: "anthropic", model: id, effort: settings?.provider === "anthropic" ? settings.effort : "high" });
+      // A model change keeps the effort the user picked; the model's default only applies on first use.
+      const keep = settings?.provider === "anthropic" ? settings.effort : anthropicModel(id)?.defaultEffort ?? "high";
+      effort.value = keep;
+      await saveSettings({ provider: "anthropic", model: id, effort: keep });
     } else {
       const preset = id as keyof typeof LOCAL_PRESETS;
       baseUrl.value = LOCAL_PRESETS[preset].baseUrl;
@@ -248,6 +315,11 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
       void connectLocal();
     }
     await syncProviderUi();
+  });
+
+  effort.addEventListener("change", () => {
+    if (settings?.provider !== "anthropic") return;
+    void saveSettings({ ...settings, effort: effort.value as Effort });
   });
 
   async function connectLocal() {
@@ -261,8 +333,9 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
       localModel.replaceChildren(...r.models.map((m: string) => h("option", { value: m }, m)));
       if (cur && r.models.includes(cur)) localModel.value = cur;
       await saveLocal();
+      setConn("ok", `Server up · ${r.models.length} model(s)`);
     } else {
-      add(h("div", { class: "cp-err" }, `No local server at ${baseUrl.value} (${r.message ?? "unreachable"}). Start mlx_lm.server, llama.cpp or Ollama, then Retry.`));
+      setConn("bad", `No local server at ${baseUrl.value} (${r.message ?? "unreachable"}). Start mlx_lm.server, llama.cpp or Ollama, then Retry.`);
     }
   }
 
@@ -275,14 +348,52 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
   localModel.addEventListener("change", () => void saveLocal());
   baseUrl.addEventListener("change", () => void saveLocal());
 
-  keySave.addEventListener("click", async () => {
+  async function saveKey() {
     keySave.disabled = true;
-    keyMsg.textContent = "Checking the key…";
+    setConn("", "Checking the key with Anthropic…");
     const r = await deps.invoke("copilot:setKey", keyIn.value);
     keySave.disabled = false;
+    if (r.saved) {
+      keyIn.value = "";
+      keyEditing = false;
+    }
+    setConn(r.ok ? "ok" : "bad", r.message);
+    await syncProviderUi();
+  }
+  keySave.addEventListener("click", () => void saveKey());
+  keyIn.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      void saveKey();
+    }
+  });
+  keyChange.addEventListener("click", () => {
+    keyEditing = true;
+    void syncProviderUi().then(() => keyIn.focus());
+  });
+  keyCancel.addEventListener("click", () => {
+    keyEditing = false;
     keyIn.value = "";
-    keyMsg.textContent = r.ok ? "Saved to Keychain." : r.message;
-    if (r.ok) setTimeout(() => void syncProviderUi(), 800);
+    void syncProviderUi();
+  });
+  keyRemove.addEventListener("click", async () => {
+    await deps.invoke("copilot:deleteKey");
+    keyEditing = false;
+    setConn("", "Key removed from this Mac.");
+    await syncProviderUi();
+  });
+
+  testBtn.addEventListener("click", async () => {
+    testBtn.disabled = true;
+    setConn("", isLocal() ? "Testing the local server…" : "Sending one tiny request (well under a cent)…");
+    try {
+      const r = await deps.invoke("copilot:test");
+      setConn(r.ok ? "ok" : "bad", r.message);
+    } catch (err) {
+      setConn("bad", String(err));
+    } finally {
+      testBtn.disabled = false;
+    }
   });
 
   // ---- controls ----

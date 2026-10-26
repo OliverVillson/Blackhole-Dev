@@ -31,6 +31,13 @@ export const TOOLS = [
     json: { type: "object", properties: { path: str("Workspace-relative path, e.g. recipes/qwen-mac.py") }, required: ["path"] },
   }),
   spec({
+    name: "list_files",
+    side: "editor",
+    description: "List the recipe files in the user's workspace (recipes folder). Use it before reading or creating a recipe so names do not clash.",
+    schema: z.object({}),
+    json: { type: "object", properties: {} },
+  }),
+  spec({
     name: "edit_file",
     side: "editor",
     description:

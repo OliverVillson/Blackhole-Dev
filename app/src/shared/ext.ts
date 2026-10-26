@@ -34,6 +34,8 @@ export interface MainContext {
     set(name: string, value: string): Promise<void>;
     delete(name: string): Promise<void>;
     has(name: string): Promise<boolean>;
+    /** False when the OS cannot encrypt (no Keychain); set() then throws. */
+    available?(): boolean;
   };
   helper: {
     call<M extends HelperMethod>(method: M, params: HelperParams<M>): Promise<HelperResult<M>>;
