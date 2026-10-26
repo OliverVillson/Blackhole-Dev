@@ -4,25 +4,15 @@ import { h, clear, basename } from "./dom";
 import { helper } from "./bridge";
 import { renderChecks } from "./views/settings";
 import { stepChain } from "./panels/plan";
+import { holeCanvas } from "./hole";
 import type { Shell } from "./shell";
-
-const LOGO = String.raw`
-        .  *   .        .
-    .      _.--""--._       *
-  *     .'   .--.    '.   .
-       /   .'    '.    \
-  .   ;   :  ()  :   ;    .
-       \   '.    .'   /
-    *   '.   '--'   .'  *
-   .      '-.____.-'     .
-`;
 
 export function welcomeTab(shell: Shell): (el: HTMLElement) => void {
   return (el) => {
     const checks = h("div", { style: "display:flex;flex-direction:column;gap:6px" });
     el.append(h("div", { class: "page" },
       h("div", { class: "row", style: "gap:28px;align-items:center;flex-wrap:nowrap" },
-        h("pre", { class: "logo-ascii", "aria-hidden": "true" }, LOGO),
+        h("div", { class: "logo-hole", "aria-hidden": "true" }, holeCanvas(48, 4)),
         h("div", null, h("div", { class: "hd" }, "BlackHole-Harness"), h("h1", null, "BlackHole-Dev"),
           h("div", { class: "meta", style: "font-size:14px" }, "Write recipes in Python. Plan them on headers alone. Run them on your own VM."))),
       h("div", { class: "row" },
