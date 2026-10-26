@@ -1,0 +1,26 @@
+[project]
+name = "blackhole-dev"
+version = "0.1.0"
+description = "BlackHole dev training harness: the developer API for model structure, weights and named functions that BlackHole schemas call."
+requires-python = ">=3.11"
+# Licence: Elastic License 2.0 with a licence key, to be added before release (see the three-product plan).
+dependencies = ["blackhole-harness>=0.1", "numpy>=1.26", "huggingface_hub>=0.30", "httpx>=0.27"]
+
+[project.optional-dependencies]
+# the live model (training masks, REAP scores, Hessians, KL) and the tiny-model tests
+torch = ["torch>=2.7", "transformers>=4.56", "safetensors>=0.4"]
+dev = ["pytest>=8"]
+
+# The free pipeline's op catalog picks up model.edit from here when this package is installed.
+[project.entry-points."blackhole.ops"]
+blackhole_dev = "blackhole_dev.op"
+
+[tool.setuptools.packages.find]
+include = ["blackhole_dev*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

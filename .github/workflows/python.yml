@@ -1,0 +1,24 @@
+name: python
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["app/**"]
+  pull_request:
+    paths-ignore: ["app/**"]
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # the public BlackHole-Harness: blackhole (core + anatomy format layer), the pipeline (harness/) and REAPer
+      - uses: actions/checkout@v4
+        with:
+          repository: OliverVillson/BlackHole-Harness
+          path: public
+      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -e 'public[dev]' -e 'public/reaper[pipeline]' -e public/harness -e '.[torch,dev]'
+      - run: pytest -q
