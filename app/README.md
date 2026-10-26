@@ -39,24 +39,38 @@ npm install
 npm run dev
 ```
 
-If `npm install` prints `install-scripts not yet covered by allowScripts` (npm 12 and newer blocks
-package install scripts until you allow them), Electron never unpacks itself and `npm run dev` dies
-with "Electron uninstall". Allow them and install again:
+`npm install` and `npm run dev` both check that the Electron binary is really there and download it
+when it is not (Electron's own installer can exit silently without it, which shows up as
+"Electron uninstall"). If the check still fails it prints why and what to run. To check everything
+at once (Electron, Node, node-pty, the Python helper, ssh, rsync):
+
+```bash
+cd ~/src/Blackhole-Dev/app
+source ~/bhdev-venv/bin/activate
+npm run doctor
+```
+
+On npm 12 and newer, `npm install` may also warn that some packages' install scripts are not yet
+allowed. Allow the ones the app needs, then install again:
 
 ```bash
 cd ~/src/Blackhole-Dev/app
 npm install-scripts approve electron node-pty fsevents
 npm install
-npm run dev
 ```
 
-If your npm has no `install-scripts` command, finish Electron's install by hand instead:
+If Electron is still missing after that, clear its download cache and reinstall it:
 
 ```bash
 cd ~/src/Blackhole-Dev/app
-node node_modules/electron/install.js
-npm run dev
+unset ELECTRON_SKIP_BINARY_DOWNLOAD ELECTRON_OVERRIDE_DIST_PATH
+rm -rf ~/Library/Caches/electron node_modules/electron
+npm install
+npm run doctor
 ```
+
+To update later, `git pull --autostash` in `~/src/Blackhole-Dev` (it keeps a local `allowScripts`
+entry that `npm install-scripts approve` writes into `package.json`), then `npm install` in `app/`.
 
 `node-pty` is what gives the TERMINAL panel a real TTY; it builds from source on Apple silicon and
 takes a few seconds. If it fails, the app still runs and the terminal falls back to plain pipes.
@@ -71,7 +85,7 @@ and a starter recipe. Then:
   only ever read by the app's main process. No billing goes through the app.
 - **Settings > Checks** lists Python, blackhole_dev, ssh and rsync.
 
-Other commands: `npm run build` (production bundle), `npm start` (run that bundle),
+Other commands: `npm run doctor` (environment check), `npm run build` (production bundle), `npm start` (run that bundle),
 `npm run dist:mac` (unsigned `.dmg` in `dist/`), `npm test`, `npm run typecheck`.
 
 ## Layout
