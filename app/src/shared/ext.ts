@@ -57,6 +57,8 @@ export interface ActivityDef {
   title: string;
   icon: string;
   order?: number;
+  /** Runs on click instead of opening a sidebar view, for an activity that lives elsewhere (the Copilot panel). */
+  run?: () => void;
 }
 
 export interface PanelDef {

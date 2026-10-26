@@ -28,7 +28,7 @@ export function activate(ctx: RendererContext): void {
   });
 
   let panelEl: HTMLElement | null = null;
-  ctx.registerActivity({ id: "copilot", title: "Copilot", icon: ICON, order: 50 });
+  ctx.registerActivity({ id: "copilot", title: "Copilot", icon: ICON, order: 50, run: () => void ctx.executeCommand("copilot.ask") });
   ctx.registerRightPanel({
     id: "copilot",
     title: "Copilot",
@@ -56,7 +56,8 @@ export function activate(ctx: RendererContext): void {
     id: "copilot.ask",
     title: "Ask Copilot",
     keybinding: "Cmd+I",
-    run: () => {
+    run: async () => {
+      await ctx.executeCommand("workbench.right", "copilot");
       if (panelEl) focusCopilot(panelEl);
     },
   });

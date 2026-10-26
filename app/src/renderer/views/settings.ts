@@ -10,13 +10,14 @@ interface Check { id: string; label: string; ok: boolean; detail: string; fix?: 
 
 export function renderChecks(el: HTMLElement): Promise<void> {
   clear(el);
+  el.classList.add("checks");
   el.append(h("div", { class: "meta" }, "Checking…"));
   return bh.invoke<Check[]>("app:checks").then((cs) => {
     clear(el);
     for (const c of cs)
       el.append(h("div", { class: "check" },
         h("span", { class: c.ok ? "tone-ok" : "tone-bad", "aria-label": c.ok ? "ok" : "problem" }, c.ok ? "✓" : "✕"),
-        h("span", { style: "width:170px;flex:none" }, c.label),
+        h("span", null, c.label),
         h("span", { class: "meta" }, c.detail, !c.ok && c.fix ? h("span", { style: "color:var(--text)" }, ` · fix: ${c.fix}`) : null)));
   });
 }

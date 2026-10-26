@@ -1,18 +1,11 @@
 import { formatBytes, formatStats, splitOrphanThink } from '../shared/stats';
 import type { ChatMessage, ChatStats, LocalModel } from '../shared/types';
+import { holeCanvas } from '../../shared/hole';
 import { h, ICONS, svg } from './dom';
 import { renderMarkdown } from './markdown';
 import type { ChatStore } from './store';
 
 const PHASE_TEXT = { stopped: 'stopped', starting: 'loading model…', ready: 'ready', stopping: 'stopping…', crashed: 'stopped with an error' };
-
-const LOGO = [
-  '      .  -~~~~~-  .      ',
-  '   .~   .-===-.   ~.   ',
-  '  (    ( ●     )    )  ',
-  '   `~.  `-===-\'  .~`   ',
-  "      '  -~~~~~-  '      ",
-].join('\n');
 
 function statsLine(s: ChatStats, extra?: string): HTMLElement {
   const el = h('div.bhc-stats');
@@ -153,7 +146,7 @@ export function renderChatTab(root: HTMLElement, store: ChatStore, tabState: Cha
         h(
           'div.bhc-empty',
           {},
-          h('pre', { 'aria-hidden': 'true' }, LOGO),
+          h('div.bhc-hole', { 'aria-hidden': 'true' }, holeCanvas(40, 4)),
           h('b', {}, m ? `Chat with ${m.name}` : 'No local models yet'),
           m
             ? serving()

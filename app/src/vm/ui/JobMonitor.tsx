@@ -7,38 +7,56 @@ import type { JobRef, JobUpdate, KlPoint, LogLine, PullProgress } from "../share
 import { jobKey } from "../shared";
 import type { VmApi } from "./api";
 
+/** Rounds up to 1, 2 or 5 times a power of ten, so the axis ends on a readable value. */
+function niceCeil(v: number): number {
+  const p = 10 ** Math.floor(Math.log10(v));
+  return [1, 2, 5, 10].map((m) => m * p).find((n) => n >= v) ?? 10 * p;
+}
+
 export function KlChart({ points }: { points: KlPoint[] }) {
+  // Drawn at the card's real width (not a scaled viewBox), so text and lines keep their size.
+  const [box, setBox] = useState<HTMLDivElement | null>(null);
+  const [W, setW] = useState(600);
+  useEffect(() => {
+    if (!box || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setW(Math.max(240, Math.floor(e.contentRect.width))));
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [box]);
+
   if (points.length < 2) {
     return <div className="dim" style={{ height: 120, display: "flex", alignItems: "center" }}>{points.length ? `one reading so far: ${points[0].kl.toFixed(4)}` : "no held-out KL yet (it is measured every few steps while healing)"}</div>;
   }
-  const W = 600;
-  const H = 120;
-  const pad = { l: 46, r: 8, t: 8, b: 18 };
-  const xs = points.map((_, i) => i);
-  const ys = points.map((p) => p.kl);
-  let lo = Math.min(...ys);
-  let hi = Math.max(...ys);
-  if (hi - lo < 1e-6) {
-    lo -= 0.001;
-    hi += 0.001;
-  }
-  const x = (i: number) => pad.l + ((W - pad.l - pad.r) * i) / Math.max(1, xs.length - 1);
-  const y = (v: number) => pad.t + ((H - pad.t - pad.b) * (hi - v)) / (hi - lo);
-  const pts = points.map((p, i) => `${x(i).toFixed(1)},${y(p.kl).toFixed(1)}`).join(" ");
+  const H = 132;
+  const pad = { l: 52, r: 12, t: 10, b: 22 };
   const first = points[0];
   const last = points[points.length - 1];
+  // The axis starts at 0 (identical to the original), so a small change in KL looks small.
+  const hi = niceCeil(Math.max(...points.map((p) => p.kl)) * 1.1 || 1e-3);
+  const digits = hi < 0.01 ? 4 : hi < 0.1 ? 3 : 2;
+  const s0 = first.step;
+  const s1 = last.step > s0 ? last.step : s0 + points.length - 1;
+  const x = (p: KlPoint, i: number) => pad.l + ((W - pad.l - pad.r) * ((last.step > s0 ? p.step : s0 + i) - s0)) / (s1 - s0);
+  const y = (v: number) => pad.t + ((H - pad.t - pad.b) * (hi - v)) / hi;
+  const pts = points.map((p, i) => `${x(p, i).toFixed(1)},${y(p.kl).toFixed(1)}`).join(" ");
   const label = `Held-out KL from ${first.kl.toFixed(4)} at step ${first.step} to ${last.kl.toFixed(4)} at step ${last.step}, ${points.length} readings`;
+  const lx = x(last, points.length - 1);
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 120, marginTop: 8 }} role="img" aria-label={label}>
-      <line x1={pad.l} y1={pad.t} x2={pad.l} y2={H - pad.b} stroke="var(--line2, #2b0d05)" />
-      <line x1={pad.l} y1={H - pad.b} x2={W - pad.r} y2={H - pad.b} stroke="var(--line2, #2b0d05)" />
-      <text x={pad.l - 6} y={pad.t + 8} textAnchor="end" fontSize="10" fill="var(--dim, #a2735b)">{hi.toFixed(4)}</text>
-      <text x={pad.l - 6} y={H - pad.b} textAnchor="end" fontSize="10" fill="var(--dim, #a2735b)">{lo.toFixed(4)}</text>
-      <text x={pad.l} y={H - 4} fontSize="10" fill="var(--dim, #a2735b)">step {first.step}</text>
-      <text x={W - pad.r} y={H - 4} textAnchor="end" fontSize="10" fill="var(--dim, #a2735b)">step {last.step}</text>
-      <polyline points={pts} fill="none" stroke="var(--ember, #ff6a00)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-      <circle cx={x(points.length - 1)} cy={y(last.kl)} r="3" fill="var(--flare, #ffae42)" />
-    </svg>
+    <div ref={setBox} style={{ marginTop: 8 }}>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }} role="img" aria-label={label}>
+        {[0, hi / 2, hi].map((v) => (
+          <g key={v}>
+            <line x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} stroke="var(--line2, #2b0d05)" strokeDasharray={v ? "2 4" : undefined} />
+            <text x={pad.l - 8} y={y(v) + 3.5} textAnchor="end" fontSize="10" fill="var(--dim, #a2735b)">{v.toFixed(digits)}</text>
+          </g>
+        ))}
+        <text x={pad.l} y={H - 5} fontSize="10" fill="var(--dim, #a2735b)">step {first.step}</text>
+        <text x={W - pad.r} y={H - 5} textAnchor="end" fontSize="10" fill="var(--dim, #a2735b)">step {last.step}</text>
+        <polyline points={pts} fill="none" stroke="var(--ember, #ff6a00)" strokeWidth="2" strokeLinejoin="round" />
+        <circle cx={lx} cy={y(last.kl)} r="3.5" fill="var(--flare, #ffae42)" />
+        <text x={Math.min(lx, W - pad.r - 4)} y={y(last.kl) - 9} textAnchor="end" fontSize="11" fill="var(--photon, #f5efe6)">{last.kl.toFixed(4)}</text>
+      </svg>
+    </div>
   );
 }
 
@@ -120,7 +138,7 @@ export function JobMonitor(props: { api: VmApi; tab: MonitorState; openTerminal(
           <div className="hd">Job · {tab.hostLabel} · {ref.name}</div>
           <h1>
             {ref.name}
-            {st && <span className={`badge ${st.status}`}>● {st ? summary(st) : ""}</span>}
+            {st && <span className={`jstate ${st.status}`}>● {summary(st)}</span>}
           </h1>
           {u && u.link !== "live" && <div className="dim">{u.link === "reconnecting" ? "reconnecting to the machine…" : "offline"}{u.error ? `: ${u.error}` : ""}</div>}
         </div>
