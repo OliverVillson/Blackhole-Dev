@@ -523,11 +523,16 @@ export class Shell {
     ]);
   }
 
-  async openFile(path: string, line?: number, opts: { readonly?: boolean; text?: string; title?: string; group?: Group } = {}): Promise<void> {
+  async openFile(path: string, line?: number, opts: { readonly?: boolean; text?: string; title?: string; group?: Group; create?: boolean } = {}): Promise<void> {
     const key = `file:${path}`;
     let tab = opts.group ? opts.group.tabs.find((x) => x.key === key) : this.findTab(key);
     if (!tab) {
-      await this.editor.load(path, opts);
+      try {
+        await this.editor.load(path, opts);
+      } catch (err) {
+        if (!opts.create) throw err;
+        this.editor.modelFor(path);
+      }
       tab = this.addTab(opts.group ?? this.activeGroup, key, "file", { path }, opts.title ?? basename(path));
       this.lintSoon(path);
     }
@@ -965,7 +970,7 @@ export class Shell {
       this.activeFileCbs.add(cb);
       return () => this.activeFileCbs.delete(cb);
     },
-    open: (path, line) => this.openFile(path, line),
+    open: (path, line, opts) => this.openFile(path, line, { create: opts?.create }),
     listRecipes: async () => flatten(await bh.invoke("ws:list", this.paths.recipes)),
     readFile: (path) => {
       const b = this.editor.buffers.get(path);

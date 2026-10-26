@@ -1,18 +1,20 @@
 import { describe, expect, it } from "vitest";
 import type { LlmChunk } from "../../src/llm/types";
-import { CopilotSession, type CopilotEvent, type TurnRequest } from "../../src/copilot/session";
+import { CopilotSession, cleanError, type CopilotEvent, type TurnRequest } from "../../src/copilot/session";
 import { FakeEditor } from "./fakeEditor";
 
 type Script = (req: TurnRequest, t: Tools) => AsyncGenerator<LlmChunk>;
 interface Tools { pump(n?: number): void; ed: FakeEditor; aborted: Promise<void> }
 
-function setup(scripts: Script[], opts: { active?: string } = {}) {
+function setup(scripts: Script[], opts: { active?: string; disk?: Record<string, string>; helper?: (method: string, params: any) => unknown } = {}) {
   const ed = new FakeEditor();
   const reqs: TurnRequest[] = [];
   const helperCalls: [string, any][] = [];
   const invokes: [string, any][] = [];
   let tick: (() => void) | null = null;
   const aborts = new Map<string, () => void>();
+  const toolResults = new Map<string, { content: string; isError?: boolean }>();
+  const opened: [string, { create?: boolean } | undefined][] = [];
   const pump = (n = 400) => { for (let i = 0; i < n; i++) tick?.(); };
   const session = new CopilotSession({
     editor: ed,
@@ -25,8 +27,19 @@ function setup(scripts: Script[], opts: { active?: string } = {}) {
       yield* s(req, { pump, ed, aborted });
     },
     abortTurn: (id) => aborts.get(id)?.(),
+    toolResult: (callId, r) => toolResults.set(callId, r),
+    ...(opts.disk
+      ? {
+          readFile: async (path: string) => {
+            if (path in opts.disk!) return opts.disk![path];
+            throw new Error(`ENOENT: no such file, open '${path}'`);
+          },
+          openFile: async (path: string, o?: { create?: boolean }) => void opened.push([path, o]),
+        }
+      : {}),
     helper: async (method, params) => {
       helperCalls.push([method, params]);
+      if (opts.helper) return opts.helper(method, params);
       if (method === "recipe.lint") return { problems: [] };
       if (method === "recipe.plan") return { rows: [], sizeGb: 9.5, fits: true, problems: [], steps: [] };
       return {};
@@ -46,7 +59,7 @@ function setup(scripts: Script[], opts: { active?: string } = {}) {
   // Keep the pacer moving between awaits.
   const timer = setInterval(() => pump(50), 1);
   return {
-    ed, session, reqs, helperCalls, invokes, events, pump,
+    ed, session, reqs, helperCalls, invokes, events, pump, toolResults, opened,
     done: () => {
       clearInterval(timer);
       // An expect() failing inside a scripted turn surfaces as an error event.
@@ -191,5 +204,108 @@ describe("CopilotSession", () => {
     await t.session.ask("bump b");
     t.done();
     expect(t.ed.applied).toEqual([]);
+  });
+
+  it("write_file from inside Claude Code's tool loop types the file before lint reads it", async () => {
+    const content = RECIPE.join("\n") + "\n";
+    let t!: ReturnType<typeof setup>;
+    const waitFor = async (id: string) => {
+      while (!t.toolResults.has(id)) await new Promise((r) => setTimeout(r, 1));
+      return t.toolResults.get(id)!;
+    };
+    t = setup(
+      [
+        async function* () {
+          // Claude Code runs tools itself and streams no text before them.
+          yield { type: "tool_run", callId: "w1", name: "write_file", input: { path: "recipes/int4.py", content } } as any;
+          const w = await waitFor("w1");
+          expect(w.isError).toBeFalsy();
+          expect(w.content).toContain("Wrote 5 line(s) to recipes/int4.py");
+          yield { type: "tool_run", callId: "l1", name: "lint_recipe", input: { path: "recipes/int4.py" } } as any;
+          await waitFor("l1");
+          yield { type: "tool_run", callId: "r1", name: "read_file", input: { path: "recipes/int4.py" } } as any;
+          const r = await waitFor("r1");
+          expect(r.content).toContain("pipeline.bench");
+          yield { type: "text", text: "Written and lint is clean." };
+          yield { type: "done", finishReason: "stop" };
+        },
+      ],
+      { disk: {} },
+    );
+    await t.session.ask('write a script for int4 quant called "int4.py"');
+    t.done();
+    expect(t.ed.getText("recipes/int4.py")).toBe(content);
+    expect(t.helperCalls[0]).toEqual(["recipe.lint", { path: "recipes/int4.py", text: content }]);
+    // a new file gets its own (empty) tab before the copilot types into it
+    expect(t.opened).toEqual([["recipes/int4.py", { create: true }]]);
+    const writes = t.events.filter((e) => e.type === "write").map((e: any) => e.status);
+    expect(writes).toEqual(["start", "done"]);
+    expect(t.events.some((e) => e.type === "code" && e.text === content)).toBe(true);
+  });
+
+  it("write_file works as a normal tool call too, and rewrite replaces the file", async () => {
+    const t = setup([
+      async function* () {
+        yield { type: "tool_use", id: "w1", name: "write_file", input: { path: "r.py", content: "a = 2", mode: "rewrite" } };
+        yield { type: "done", finishReason: "tool_use" };
+      },
+      async function* (req) {
+        const r = (req.messages.at(-1)!.content as any[])[0];
+        expect(r).toMatchObject({ type: "tool_result", tool_use_id: "w1" });
+        expect(r.is_error).toBeFalsy();
+        yield { type: "done", finishReason: "stop" };
+      },
+    ], { active: "r.py" });
+    t.ed.setText("r.py", "a = 1\nb = 1");
+    await t.session.ask("set a to 2, nothing else");
+    t.done();
+    expect(t.ed.getText("r.py")).toBe("a = 2\n");
+  });
+
+  it("lint on a file that is not open reads it from disk instead of linting an empty buffer", async () => {
+    const t = setup([
+      async function* () {
+        yield { type: "tool_use", id: "l1", name: "lint_recipe", input: { path: "recipes/old.py" } };
+        yield { type: "done", finishReason: "tool_use" };
+      },
+      async function* () {
+        yield { type: "done", finishReason: "stop" };
+      },
+    ], { disk: { "recipes/old.py": RECIPE.join("\n") } });
+    await t.session.ask("lint old.py");
+    t.done();
+    expect(t.helperCalls[0][1]).toEqual({ path: "recipes/old.py", text: RECIPE.join("\n") });
+    expect(t.ed.docs.has("recipes/old.py")).toBe(false);
+  });
+
+  it("helper errors reach the model and the panel without Electron's IPC wrapper", async () => {
+    const t = setup([
+      async function* () {
+        yield { type: "tool_use", id: "p1", name: "plan_recipe", input: { path: "r.py", device: "mac16" } };
+        yield { type: "done", finishReason: "tool_use" };
+      },
+      async function* (req) {
+        const r = (req.messages.at(-1)!.content as any[])[0];
+        expect(r.is_error).toBe(true);
+        expect(r.content).toBe('this file builds no Recipe (recipe = Recipe("you/name", "0.1.0", ...))');
+        yield { type: "done", finishReason: "stop" };
+      },
+    ], {
+      helper: () => {
+        throw new Error(`Error invoking remote method 'bh:invoke': Error: this file builds no Recipe (recipe = Recipe("you/name", "0.1.0", ...))`);
+      },
+    });
+    await t.session.ask("plan it");
+    t.done();
+    const tool = t.events.filter((e) => e.type === "tool").at(-1) as any;
+    expect(tool.summary).toBe('plan recipe: this file builds no Recipe (recipe = Recipe("you/name", "0.1.0", ...))');
+  });
+});
+
+describe("cleanError", () => {
+  it("strips the IPC wrapper and error class prefixes", () => {
+    expect(cleanError(new Error("Error invoking remote method 'bh:invoke': RpcError: boom"))).toBe("boom");
+    expect(cleanError("Error: Error invoking remote method 'copilot:helper': Error: x y")).toBe("x y");
+    expect(cleanError(new Error("plain"))).toBe("plain");
   });
 });

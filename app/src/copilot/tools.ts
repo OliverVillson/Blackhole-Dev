@@ -38,6 +38,26 @@ export const TOOLS = [
     json: { type: "object", properties: {} },
   }),
   spec({
+    name: "write_file",
+    side: "editor",
+    description:
+      "Write a whole file (a new recipe, a full rewrite, or the rest of a file you were writing when interrupted). The content is typed into the user's editor as pending changes they accept or reject. Use it whenever you are not streaming a path= fence in your reply, and never say a file is written unless this tool or edit_file succeeded.",
+    schema: z.object({
+      path: z.string().min(1),
+      content: z.string(),
+      mode: z.enum(["new", "rewrite", "append"]).optional(),
+    }),
+    json: {
+      type: "object",
+      properties: {
+        path: str("Workspace-relative path, e.g. recipes/int4.py"),
+        content: str("The complete file text (for mode=append, only the lines to add)"),
+        mode: { type: "string", enum: ["new", "rewrite", "append"], description: "new (default): a file that does not exist yet; rewrite: replace the whole file; append: continue after the last line you wrote" },
+      },
+      required: ["path", "content"],
+    },
+  }),
+  spec({
     name: "edit_file",
     side: "editor",
     description:

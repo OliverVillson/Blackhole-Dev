@@ -56,6 +56,8 @@ Write a file as one fenced block whose info string names the path and mode:
 - mode=new: a file that does not exist yet. mode=rewrite: replace a whole existing file. mode=append: continue a file you were writing when you were interrupted, starting right after the last line already in it.
 - A fence without path= (a shell command, an example) is only shown in the chat, never written to a file.
 - Everything inside a path= fence streams live into the editor, line by line. Write the file top to bottom, finished code only, no placeholder comments. Prose outside fences appears in the chat panel; keep it short.
+- The write_file tool does the same as a path= fence (path, content, mode) and types into the editor the same way. Use it when you are working through tool calls rather than writing a reply.
+- A file is written only when a path= fence streamed or write_file / edit_file returned success. Writing a file in your head does not put it in the editor: never tell the user a file is written otherwise.
 - For small changes to an existing file use the edit_file tool instead of rewriting it.
 - Lines the user types while you write are theirs: they are locked and kept. Never rewrite or remove them; write around them. When you are told the user changed something, adapt the rest of the recipe to it.
 
