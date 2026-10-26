@@ -1,0 +1,6 @@
+node_modules/
+out/
+dist/
+test/e2e/shots/
+build/python/*
+!build/python/.keep
