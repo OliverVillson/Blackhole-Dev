@@ -3,6 +3,8 @@
 import { h, clear } from "../dom";
 import { bh } from "../bridge";
 import { toast } from "../ui";
+import { prettyKeys } from "../keys";
+import { KEYMAP, EDITOR_KEYS } from "../shortcuts";
 import type { Shell } from "../shell";
 import type { Licence } from "../../shared/ext";
 
@@ -56,6 +58,7 @@ export function settingsView(shell: Shell): (el: HTMLElement) => void {
         } }, "Save key"),
         h("button", { class: "btn sm", onclick: async () => { await bh.invoke("secrets:delete", "anthropic-api-key"); refreshKey(); } }, "Remove")), keyState,
         h("div", { class: "meta", style: "padding:0 4px" }, "Your key never leaves this Mac except in requests to Anthropic. There is no billing through the app.")),
+      section("Keyboard shortcuts", shortcutsList(shell)),
       section("Licence", licence),
       section("Checks", checks, h("div", { class: "row" }, h("button", { class: "btn sm", onclick: () => renderChecks(checks) }, "Run checks again"))),
     );
@@ -68,4 +71,28 @@ export function settingsView(shell: Shell): (el: HTMLElement) => void {
     refreshKey();
     renderChecks(checks);
   };
+}
+
+function shortcutsList(shell: Shell): HTMLElement {
+  const filter = h("input", { placeholder: "Filter shortcuts", "aria-label": "Filter shortcuts", style: "width:100%" });
+  const list = h("div", { class: "keys-list" });
+  const rows: [string, string, string?][] = [
+    ...KEYMAP.map((b) => [b.keys, b.label ?? shell.commands.get(b.command)?.title ?? b.command, b.note] as [string, string, string?]),
+    ...[...shell.commands.values()].filter((c) => c.keybinding && !KEYMAP.some((b) => b.keys === c.keybinding)).map((c) => [c.keybinding!, c.title] as [string, string]),
+    ...EDITOR_KEYS.map(([k, what]) => [k, what, "editor"] as [string, string, string]),
+  ];
+  const draw = () => {
+    clear(list);
+    const q = filter.value.trim().toLowerCase();
+    for (const [keys, what, note] of rows) {
+      if (q && !what.toLowerCase().includes(q) && !keys.toLowerCase().includes(q)) continue;
+      list.append(h("div", { class: "keys-row", title: note && note !== "editor" ? note : "" },
+        h("span", { class: "keys-what" }, what, note && note !== "editor" ? h("span", { class: "meta" }, " *") : null),
+        h("kbd", null, prettyKeys(keys))));
+    }
+  };
+  filter.addEventListener("input", draw);
+  draw();
+  return h("div", { style: "display:flex;flex-direction:column;gap:6px;padding:0 4px" }, filter, list,
+    h("div", { class: "meta" }, "* hover for a note. macOS keeps Cmd+Tab for its app switcher, so use Cmd+Ctrl+Tab or Cmd+1…9 to move between editor groups."));
 }

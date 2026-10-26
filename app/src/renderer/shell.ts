@@ -3,9 +3,11 @@
 
 import { h, clear, basename, debounce, ICONS } from "./dom";
 import { bh, helper } from "./bridge";
-import { EditorManager } from "./editor/monaco";
-import { showModal, toast } from "./ui";
-import { isMac, matches } from "./keys";
+import { EditorManager, type EditorView } from "./editor/monaco";
+import { contextMenu, showModal, toast } from "./ui";
+import { isMac, matches, prettyKeys } from "./keys";
+import { KEYMAP } from "./shortcuts";
+import { dropZone, groupsOf, leaf, remove, split, type LayoutNode, type Side } from "./layout";
 import { THEME } from "../shared/theme";
 import type {
   ActivityDef, AppPaths, CommandDef, Dispose, Mount, OverviewSectionDef, PanelDef, RecipeActionDef, RendererContext,
@@ -22,16 +24,36 @@ interface Slot {
   dispose?: void | Dispose;
 }
 
-interface Tab {
+export interface Tab {
   key: string;
   type: string;
   state: any;
+  title: string;
+  group: Group;
   button: HTMLButtonElement;
   pane?: HTMLElement;
   dispose?: void | Dispose;
 }
 
+/** An editor group: a tab strip with its own Monaco view. Groups are laid out by layout.ts. */
+export interface Group {
+  id: number;
+  el: HTMLElement;
+  tablist: HTMLElement;
+  tabActions: HTMLElement;
+  groupActions: HTMLElement;
+  crumbs: HTMLElement;
+  hunkbar: HTMLElement;
+  host: HTMLElement;
+  monacoPane: HTMLElement;
+  drop: HTMLElement;
+  view: EditorView;
+  tabs: Tab[];
+  active: Tab | null;
+}
 
+const ICON_SPLIT = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M8 2.5v11"/></svg>';
+const ICON_COLLAPSE = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M11 6 8.5 8 11 10M8.5 8H14"/></svg>';
 
 export class Shell {
   paths!: AppPaths;
@@ -47,8 +69,11 @@ export class Shell {
   private activePanel: string | null = null;
   private activeRight: string | null = null;
   readonly tabTypes = new Map<string, TabTypeDef>();
-  private tabs: Tab[] = [];
-  private activeTab: Tab | null = null;
+  private layout!: LayoutNode<Group>;
+  private activeGroup!: Group;
+  private groupSeq = 1;
+  private dragTab: Tab | null = null;
+  private closed: { type: string; state: any }[] = [];
   readonly commands = new Map<string, CommandDef>();
   readonly recipeActions: RecipeActionDef[] = [];
   readonly overviewSections: OverviewSectionDef[] = [];
@@ -62,12 +87,7 @@ export class Shell {
   private activityTop = h("div", { style: "display:flex;flex-direction:column" });
   private activityBottom = h("div", { style: "display:flex;flex-direction:column;margin-top:auto" });
   private sidebar = h("section", { class: "sidebar", "aria-label": "Sidebar" });
-  private tablist = h("div", { class: "tablist", role: "tablist" });
-  private tabActions = h("div", { class: "tab-actions" });
-  private crumbs = h("div", { class: "crumbs" });
-  readonly hunkbar = h("div", { class: "hunkbar hidden", "aria-label": "Copilot changes" });
-  private editorHost = h("div", { class: "editor-host" });
-  private monacoPane = h("div", { class: "pane" });
+  private editorArea = h("div", { class: "editor-area" });
   private panel = h("section", { class: "panel", "aria-label": "Panel" });
   private panelTabs = h("div", { class: "panel-tabs", role: "tablist" });
   readonly panelNote = h("span", { class: "panel-note" });
@@ -80,20 +100,16 @@ export class Shell {
 
   constructor(mount: HTMLElement) {
     this.root = mount;
-    const monacoHost = h("div", { class: "monaco-host" });
-    this.monacoPane.append(monacoHost);
-    this.editorHost.append(this.monacoPane);
     this.panel.append(this.panelTabs, this.panelBody);
     this.panelTabs.append(this.panelNote);
     this.right.append(this.rightTabs, this.rightBody);
 
     const title = h("header", { class: `titlebar${isMac ? " mac" : ""}` },
       h("div", { class: "brand" }, h("span", { html: ICONS.logo }), h("b", null, "BLACKHOLE", h("span", null, "//"), "DEV")),
-      h("div", { class: "search" }, h("button", { onclick: () => this.executeCommand("palette.open") }, `search recipes, functions, commands  ${isMac ? "⌘" : "Ctrl+"}P`)),
+      h("div", { class: "search" }, h("button", { onclick: () => this.executeCommand("palette.open") }, `search recipes, functions, commands  ${prettyKeys("Cmd+P")}`)),
       this.titleItems);
     const center = h("main", { class: "center" },
-      h("div", { class: "tabs" }, this.tablist, this.tabActions),
-      this.crumbs, this.hunkbar, this.editorHost,
+      this.editorArea,
       this.sash("h", this.panel, "height", -1, 120, 700),
       this.panel);
     const body = h("div", { class: "body" },
@@ -103,12 +119,17 @@ export class Shell {
       this.sash("v", this.right, "width", -1, 260, 640), this.right);
     const status = h("footer", { class: "status" }, this.statusLeft, h("div", { class: "spacer" }), this.statusRight);
     mount.append(title, body, status);
-    this.editor = new EditorManager(monacoHost);
+    this.editor = new EditorManager();
+    const first = this.newGroup();
+    this.layout = leaf(first);
+    this.activeGroup = first;
+    first.el.classList.add("active");
+    this.renderLayout();
     this.editor.on("dirty", (b) => this.refreshTabButton(b.path));
     this.editor.on("change", (b) => this.lintSoon(b.path));
     this.editor.on("hunks", (file) => this.renderHunkbar(file));
     this.right.classList.add("hidden");
-    window.addEventListener("keydown", (e) => this.onKey(e));
+    window.addEventListener("keydown", (e) => this.onKey(e), true);
     bh.on("app:command", (id: string) => this.executeCommand(id).catch((e) => toast(String(e.message ?? e), "error")));
     bh.on("helper:status", (s: HelperStatus) => this.setHelperStatus(s));
   }
@@ -251,169 +272,550 @@ export class Shell {
     this.right.classList.toggle("hidden");
   }
 
-  // ---- tabs ----------------------------------------------------------------
+  // ---- editor groups and tabs ---------------------------------------------
+  // The editor area is a tree of groups (layout.ts). Each group has its own tab strip and
+  // Monaco editor; drag a tab onto a group's edge to split, onto a tab or tab strip to move it.
+
+  private newGroup(): Group {
+    const tablist = h("div", { class: "tablist", role: "tablist" });
+    const monacoHost = h("div", { class: "monaco-host" });
+    const monacoPane = h("div", { class: "pane hidden" }, monacoHost);
+    const drop = h("div", { class: "drop-zone", "aria-hidden": "true" });
+    const host = h("div", { class: "editor-host" }, monacoPane, drop);
+    const g: Group = {
+      id: this.groupSeq++,
+      el: h("section", { class: "group", "aria-label": "Editor group" }),
+      tablist, tabActions: h("div", { class: "tab-actions" }), groupActions: h("div", { class: "group-actions" }),
+      crumbs: h("div", { class: "crumbs", style: "display:none" }), hunkbar: h("div", { class: "hunkbar hidden", "aria-label": "Copilot changes" }),
+      host, monacoPane, drop, view: this.editor.createView(monacoHost), tabs: [], active: null,
+    };
+    g.el.append(h("div", { class: "tabs" }, tablist, g.tabActions, g.groupActions), g.crumbs, g.hunkbar, host);
+    g.el.addEventListener("mousedown", () => this.setActiveGroup(g), true);
+    tablist.addEventListener("wheel", (e) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) tablist.scrollLeft += e.deltaY;
+    }, { passive: true });
+    tablist.addEventListener("dragover", (e) => {
+      if (!this.dragTab || e.target !== tablist) return;
+      e.preventDefault();
+      this.clearDropMarks();
+      tablist.classList.add("drop-end");
+    });
+    tablist.addEventListener("dragleave", () => tablist.classList.remove("drop-end"));
+    tablist.addEventListener("drop", (e) => {
+      if (!this.dragTab || e.target !== tablist) return;
+      e.preventDefault();
+      this.moveTab(this.dragTab, g, g.tabs.length);
+    });
+    drop.addEventListener("dragover", (e) => {
+      if (!this.dragTab) return;
+      e.preventDefault();
+      const r = host.getBoundingClientRect();
+      drop.dataset.zone = dropZone((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+    });
+    drop.addEventListener("dragleave", () => delete drop.dataset.zone);
+    drop.addEventListener("drop", (e) => {
+      const tab = this.dragTab;
+      const zone = drop.dataset.zone as Side | "center" | undefined;
+      delete drop.dataset.zone;
+      if (!tab || !zone) return;
+      e.preventDefault();
+      if (zone === "center") this.moveTab(tab, g, g.tabs.length);
+      else if (!(tab.group === g && g.tabs.length === 1)) this.splitWith(tab, g, zone);
+    });
+    return g;
+  }
+
+  /** All groups in layout order (left to right, top to bottom). */
+  groups(): Group[] {
+    return groupsOf(this.layout);
+  }
+
+  private renderLayout(): void {
+    const build = (n: LayoutNode<Group>): HTMLElement => {
+      if (n.kind === "leaf") return n.group.el;
+      const box = h("div", { class: `split split-${n.dir}` });
+      n.children.forEach((c, i) => {
+        if (i > 0) box.append(this.groupSash(n, i, box));
+        const el = build(c);
+        el.style.flex = `${n.sizes[i]} 1 0px`;
+        box.append(el);
+      });
+      return box;
+    };
+    const root = build(this.layout);
+    root.style.flex = "1 1 0px";
+    clear(this.editorArea);
+    this.editorArea.append(root);
+    const gs = this.groups();
+    this.editorArea.classList.toggle("multi", gs.length > 1);
+    gs.forEach((g, i) => this.renderGroupActions(g, i, gs.length));
+  }
+
+  /** Divider between two neighbours of a split: drag to set their widths (or heights). */
+  private groupSash(n: Extract<LayoutNode<Group>, { kind: "split" }>, i: number, box: HTMLElement): HTMLElement {
+    const row = n.dir === "row";
+    const s = h("div", { class: `sash gsash ${row ? "v" : "h"}`, role: "separator", "aria-orientation": row ? "vertical" : "horizontal", title: "Drag to resize, double-click to even out" });
+    s.addEventListener("dblclick", () => {
+      const pair = n.sizes[i - 1] + n.sizes[i];
+      n.sizes[i - 1] = n.sizes[i] = pair / 2;
+      this.renderLayout();
+    });
+    s.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      const a = s.previousElementSibling as HTMLElement;
+      const b = s.nextElementSibling as HTMLElement;
+      const pa = row ? a.getBoundingClientRect().width : a.getBoundingClientRect().height;
+      const pb = row ? b.getBoundingClientRect().width : b.getBoundingClientRect().height;
+      const total = n.sizes[i - 1] + n.sizes[i];
+      const start = row ? e.clientX : e.clientY;
+      const min = 140;
+      s.classList.add("drag");
+      document.body.classList.add(row ? "resizing-v" : "resizing-h");
+      const move = (ev: MouseEvent) => {
+        const d = Math.min(pb - min, Math.max(min - pa, (row ? ev.clientX : ev.clientY) - start));
+        n.sizes[i - 1] = ((pa + d) / (pa + pb)) * total;
+        n.sizes[i] = total - n.sizes[i - 1];
+        a.style.flex = `${n.sizes[i - 1]} 1 0px`;
+        b.style.flex = `${n.sizes[i]} 1 0px`;
+      };
+      const up = () => {
+        s.classList.remove("drag");
+        document.body.classList.remove("resizing-v", "resizing-h");
+        removeEventListener("mousemove", move);
+        removeEventListener("mouseup", up);
+      };
+      addEventListener("mousemove", move);
+      addEventListener("mouseup", up);
+    });
+    void box;
+    return s;
+  }
+
+  private renderGroupActions(g: Group, index: number, count: number): void {
+    clear(g.groupActions);
+    g.groupActions.append(h("button", { class: "gbtn", title: `Split right (${prettyKeys("Cmd+\\")})`, "aria-label": "Split right", html: ICON_SPLIT, onclick: () => this.splitActive("right", g) }));
+    if (count > 1)
+      g.groupActions.append(h("button", {
+        class: "gbtn", title: `Collapse into ${index === 0 ? "the next" : "the previous"} group (${prettyKeys("Cmd+Alt+J")})`, "aria-label": "Collapse group", html: ICON_COLLAPSE,
+        onclick: (e: Event) => { e.stopPropagation(); this.collapseGroup(g); },
+      }));
+  }
+
+  get activeGroupRef(): Group {
+    return this.activeGroup;
+  }
+
+  setActiveGroup(g: Group): void {
+    if (this.activeGroup === g) return;
+    this.activeGroup = g;
+    for (const x of this.groups()) x.el.classList.toggle("active", x === g);
+    if (g.view) this.editor.setActiveView(g.view);
+    const file = this.activeFile();
+    this.activeFileCbs.forEach((cb) => cb(file));
+  }
 
   registerTabType<S>(t: TabTypeDef<S>): void {
     if (this.tabTypes.has(t.id)) throw new Error(`tab type exists: ${t.id}`);
     this.tabTypes.set(t.id, t as TabTypeDef);
   }
 
+  private allTabs(): Tab[] {
+    return this.groups().flatMap((g) => g.tabs);
+  }
+
+  private findTab(key: string, prefer?: Group): Tab | undefined {
+    return prefer?.tabs.find((x) => x.key === key) ?? this.activeGroup.tabs.find((x) => x.key === key) ?? this.allTabs().find((x) => x.key === key);
+  }
+
   openTab<S>(typeId: string, state: S): void {
     const t = this.tabTypes.get(typeId);
     if (!t) throw new Error(`no tab type ${typeId}`);
     const key = `${typeId}:${t.key ? t.key(state) : JSON.stringify(state)}`;
-    const have = this.tabs.find((x) => x.key === key);
+    const have = this.findTab(key);
     if (have) return this.focusTab(have);
-    const tab: Tab = { key, type: typeId, state, button: this.tabButton(t.title(state), () => this.focusTab(tab), () => this.closeTab(tab)) };
-    this.tabs.push(tab);
-    this.tablist.append(tab.button);
+    const tab = this.addTab(this.activeGroup, key, typeId, state, t.title(state));
     this.focusTab(tab);
   }
 
-  private tabButton(title: string, onFocus: () => void, onClose: () => void): HTMLButtonElement {
-    const x = h("span", { class: "x", role: "button", "aria-label": `Close ${title}`, onclick: (e: Event) => { e.stopPropagation(); onClose(); } }, h("span", null, "✕"));
-    const b = h("button", { class: "tab", role: "tab", title, onclick: onFocus, onauxclick: (e: MouseEvent) => e.button === 1 && onClose() }, h("span", { class: "tab-title" }, title), x);
+  private addTab(g: Group, key: string, type: string, state: any, title: string, index = g.tabs.length): Tab {
+    const tab = { key, type, state, title, group: g } as Tab;
+    tab.button = this.tabButton(tab);
+    this.insertTab(g, tab, index);
+    return tab;
+  }
+
+  private insertTab(g: Group, tab: Tab, index: number): void {
+    index = Math.max(0, Math.min(index, g.tabs.length));
+    tab.group = g;
+    g.tabs.splice(index, 0, tab);
+    g.tablist.insertBefore(tab.button, g.tabs[index + 1]?.button ?? null);
+    if (tab.pane) g.host.append(tab.pane);
+  }
+
+  private tabButton(tab: Tab): HTMLButtonElement {
+    const title = tab.title;
+    const x = h("span", { class: "x", role: "button", "aria-label": `Close ${title}`, onclick: (e: Event) => { e.stopPropagation(); this.closeTab(tab); } }, h("span", null, "✕"));
+    const b = h("button", {
+      class: "tab", role: "tab", title, draggable: "true",
+      onclick: () => this.focusTab(tab),
+      onauxclick: (e: MouseEvent) => e.button === 1 && this.closeTab(tab),
+      oncontextmenu: (e: MouseEvent) => { e.preventDefault(); this.tabMenu(tab, e.clientX, e.clientY); },
+    }, h("span", { class: "tab-title" }, title), x);
+    b.addEventListener("dragstart", (e) => {
+      this.dragTab = tab;
+      e.dataTransfer?.setData("application/x-bh-tab", tab.key);
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+      requestAnimationFrame(() => document.body.classList.add("tab-drag"));
+    });
+    b.addEventListener("dragend", () => {
+      this.dragTab = null;
+      document.body.classList.remove("tab-drag");
+      this.clearDropMarks();
+    });
+    b.addEventListener("dragover", (e) => {
+      if (!this.dragTab) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const r = b.getBoundingClientRect();
+      this.clearDropMarks();
+      b.classList.add(e.clientX < r.left + r.width / 2 ? "drop-before" : "drop-after");
+    });
+    b.addEventListener("dragleave", () => b.classList.remove("drop-before", "drop-after"));
+    b.addEventListener("drop", (e) => {
+      const moving = this.dragTab;
+      if (!moving) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const before = b.classList.contains("drop-before");
+      this.clearDropMarks();
+      const g = tab.group;
+      let i = g.tabs.indexOf(tab) + (before ? 0 : 1);
+      if (moving.group === g && g.tabs.indexOf(moving) < i) i--;
+      this.moveTab(moving, g, i);
+    });
     return b;
   }
 
-  async openFile(path: string, line?: number, opts: { readonly?: boolean; text?: string; title?: string } = {}): Promise<void> {
+  private clearDropMarks(): void {
+    document.querySelectorAll(".drop-before,.drop-after,.drop-end").forEach((el) => el.classList.remove("drop-before", "drop-after", "drop-end"));
+    document.querySelectorAll<HTMLElement>(".drop-zone[data-zone]").forEach((el) => delete el.dataset.zone);
+  }
+
+  private tabMenu(tab: Tab, x: number, y: number): void {
+    const g = tab.group;
+    const multi = this.groups().length > 1;
+    const path = tab.type === "file" ? (tab.state.path as string) : null;
+    contextMenu(x, y, [
+      { label: "Close", hint: prettyKeys("Cmd+W"), run: () => this.closeTab(tab) },
+      { label: "Close others", run: () => g.tabs.filter((t) => t !== tab).forEach((t) => this.closeTab(t)) },
+      { label: "Close to the right", run: () => g.tabs.slice(g.tabs.indexOf(tab) + 1).forEach((t) => this.closeTab(t)) },
+      { label: "Close all in group", run: () => [...g.tabs].forEach((t) => this.closeTab(t)) },
+      { sep: true, label: "" },
+      { label: "Split right", hint: prettyKeys("Cmd+\\"), run: () => this.splitTab(tab, "right") },
+      { label: "Split down", hint: prettyKeys("Cmd+Alt+\\"), run: () => this.splitTab(tab, "down") },
+      { label: "Move to next group", disabled: !multi, run: () => { const gs = this.groups(); const n = gs[(gs.indexOf(g) + 1) % gs.length]; this.moveTab(tab, n, n.tabs.length); } },
+      { label: "Collapse group into previous", disabled: !multi, hint: prettyKeys("Cmd+Alt+J"), run: () => this.collapseGroup(g) },
+      ...(path ? [
+        { sep: true, label: "" },
+        { label: "Copy path", run: () => navigator.clipboard?.writeText(path) },
+        { label: "Reveal in Finder", run: () => bh.invoke("app:reveal", path).catch(() => undefined) },
+      ] : []),
+    ]);
+  }
+
+  async openFile(path: string, line?: number, opts: { readonly?: boolean; text?: string; title?: string; group?: Group } = {}): Promise<void> {
     const key = `file:${path}`;
-    let tab = this.tabs.find((x) => x.key === key);
+    let tab = opts.group ? opts.group.tabs.find((x) => x.key === key) : this.findTab(key);
     if (!tab) {
       await this.editor.load(path, opts);
-      const t: Tab = { key, type: "file", state: { path }, button: this.tabButton(opts.title ?? basename(path), () => this.focusTab(t), () => this.closeTab(t)) };
-      tab = t;
-      this.tabs.push(t);
-      this.tablist.append(t.button);
+      tab = this.addTab(opts.group ?? this.activeGroup, key, "file", { path }, opts.title ?? basename(path));
       this.lintSoon(path);
     }
     this.focusTab(tab, line);
   }
 
-  focusTab(tab: Tab, line?: number): void {
-    this.activeTab = tab;
-    for (const t of this.tabs) {
+  /** Show a tab inside its group without moving focus to that group. */
+  private showTab(tab: Tab, line?: number, focus = false): void {
+    const g = tab.group;
+    g.active = tab;
+    for (const t of g.tabs) {
       t.button.classList.toggle("on", t === tab);
       t.button.setAttribute("aria-selected", String(t === tab));
       t.pane?.classList.add("hidden");
     }
+    tab.button.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     const isFile = tab.type === "file";
-    this.monacoPane.classList.toggle("hidden", !isFile);
-    this.crumbs.style.display = isFile ? "" : "none";
+    g.monacoPane.classList.toggle("hidden", !isFile);
+    g.crumbs.style.display = isFile ? "" : "none";
     if (isFile) {
-      this.editor.show(tab.state.path, line);
-      this.renderCrumbs();
+      this.editor.show(tab.state.path, line, g.view, focus);
+      this.renderCrumbs(g);
       this.renderHunkbar(tab.state.path);
     } else {
-      this.hunkbar.classList.add("hidden");
+      if (g.view.buffer) this.editor.hide(g.view);
+      g.hunkbar.classList.add("hidden");
       if (!tab.pane) {
         tab.pane = h("div", { class: "pane" });
-        this.editorHost.append(tab.pane);
+        g.host.append(tab.pane);
         tab.dispose = this.tabTypes.get(tab.type)!.render(tab.pane, tab.state);
       }
       tab.pane.classList.remove("hidden");
     }
-    this.renderTabActions();
+    this.renderTabActions(g);
+  }
+
+  focusTab(tab: Tab, line?: number): void {
+    this.activeGroup = tab.group;
+    for (const x of this.groups()) x.el.classList.toggle("active", x === tab.group);
+    this.editor.setActiveView(tab.group.view);
+    this.showTab(tab, line, true);
     const file = this.activeFile();
     this.activeFileCbs.forEach((cb) => cb(file));
   }
 
-  closeTab(tab: Tab): void {
-    if (tab.type === "file" && this.editor.isDirty(tab.state.path) && !confirm(`${basename(tab.state.path)} has unsaved changes. Close anyway?`)) return;
-    const i = this.tabs.indexOf(tab);
-    this.tabs.splice(i, 1);
+  private showEmpty(g: Group): void {
+    g.active = null;
+    g.monacoPane.classList.add("hidden");
+    g.crumbs.style.display = "none";
+    g.hunkbar.classList.add("hidden");
+    if (g.view.buffer) this.editor.hide(g.view);
+    this.renderTabActions(g);
+  }
+
+  /** Take a tab out of its group (the tab and its pane stay alive). Removes an emptied group. */
+  private detachTab(tab: Tab): { group: Group; index: number; removed: boolean } {
+    const g = tab.group;
+    const i = g.tabs.indexOf(tab);
+    g.tabs.splice(i, 1);
     tab.button.remove();
-    if (tab.type === "file") this.editor.close(tab.state.path);
-    else {
+    tab.button.classList.remove("on");
+    if (g.active === tab) {
+      const next = g.tabs[Math.min(i, g.tabs.length - 1)];
+      if (next) this.showTab(next);
+      else if (this.groups().length > 1) {
+        this.removeGroup(g);
+        return { group: g, index: i, removed: true };
+      } else this.showEmpty(g);
+    }
+    return { group: g, index: i, removed: false };
+  }
+
+  closeTab(tab: Tab, force = false): void {
+    const path = tab.type === "file" ? (tab.state.path as string) : null;
+    const shared = path ? this.allTabs().some((t) => t !== tab && t.key === tab.key) : false;
+    if (!force && path && !shared && this.editor.isDirty(path) && !confirm(`${basename(path)} has unsaved changes. Close anyway?`)) return;
+    const wasActive = this.activeGroup === tab.group && tab.group.active === tab;
+    this.closed.push({ type: tab.type, state: tab.state });
+    if (this.closed.length > 30) this.closed.shift();
+    const { group } = this.detachTab(tab);
+    if (path) {
+      if (!shared) this.editor.close(path);
+      else if (group.view.buffer?.path === path && group.active?.key !== tab.key) this.editor.hide(group.view);
+    } else {
       if (typeof tab.dispose === "function") tab.dispose();
       tab.pane?.remove();
     }
-    if (this.activeTab === tab) {
-      this.activeTab = null;
-      const next = this.tabs[Math.min(i, this.tabs.length - 1)];
-      if (next) this.focusTab(next);
+    if (wasActive) {
+      const g = this.groups().includes(group) ? group : this.activeGroup;
+      if (g.active) this.focusTab(g.active);
       else {
-        this.monacoPane.classList.add("hidden");
-        this.crumbs.style.display = "none";
-        this.hunkbar.classList.add("hidden");
-        this.renderTabActions();
-        this.activeFileCbs.forEach((cb) => cb(null));
+        this.setActiveGroup(g);
+        this.activeFileCbs.forEach((cb) => cb(this.activeFile()));
       }
     }
   }
 
   closeActiveTab(): void {
-    if (this.activeTab) this.closeTab(this.activeTab);
+    if (this.activeGroup.active) this.closeTab(this.activeGroup.active);
+  }
+
+  /** Reopen the most recently closed tab. */
+  async reopenClosed(): Promise<void> {
+    const t = this.closed.pop();
+    if (!t) return;
+    if (t.type === "file") await this.openFile(t.state.path).catch(() => this.reopenClosed());
+    else if (this.tabTypes.has(t.type)) this.openTab(t.type, t.state);
+  }
+
+  /** Move a tab into a group at an index (same group reorders). A duplicate file tab merges. */
+  moveTab(tab: Tab, target: Group, index: number): void {
+    if (tab.group === target) {
+      const i = target.tabs.indexOf(tab);
+      target.tabs.splice(i, 1);
+      target.tabs.splice(Math.max(0, Math.min(index, target.tabs.length)), 0, tab);
+      target.tablist.insertBefore(tab.button, target.tabs[target.tabs.indexOf(tab) + 1]?.button ?? null);
+      return this.focusTab(tab);
+    }
+    const dup = target.tabs.find((t) => t.key === tab.key);
+    if (dup) {
+      this.closeTab(tab, true);
+      return this.focusTab(dup);
+    }
+    const from = tab.group;
+    const fromShowed = tab.type === "file" && from.view.buffer?.path === tab.state.path;
+    this.detachTab(tab);
+    if (fromShowed && this.groups().includes(from) && from.active?.key !== tab.key) this.editor.hide(from.view);
+    this.insertTab(target, tab, index);
+    this.focusTab(tab);
+  }
+
+  /** Split `target` on a side and move the tab into the new group. */
+  splitWith(tab: Tab, target: Group, side: Side): Group {
+    const g = this.newGroup();
+    this.layout = split(this.layout, target, g, side);
+    this.renderLayout();
+    this.moveTab(tab, g, 0);
+    return g;
+  }
+
+  /** Split a tab into a new group: files open a second view of the same buffer, other tabs move. */
+  splitTab(tab: Tab, side: Side): void {
+    if (tab.type !== "file") {
+      if (tab.group.tabs.length > 1) this.splitWith(tab, tab.group, side);
+      return;
+    }
+    const g = this.newGroup();
+    this.layout = split(this.layout, tab.group, g, side);
+    this.renderLayout();
+    this.openFile(tab.state.path, undefined, { group: g, title: tab.title });
+  }
+
+  splitActive(side: Side, g: Group = this.activeGroup): void {
+    if (g.active) this.splitTab(g.active, side);
+    else toast("Open a tab first, then split it.", "warn");
+  }
+
+  private removeGroup(g: Group): void {
+    if (this.groups().length < 2) return;
+    this.layout = remove(this.layout, g);
+    this.editor.disposeView(g.view);
+    g.el.remove();
+    if (this.activeGroup === g) {
+      this.activeGroup = this.groups()[0];
+      this.editor.setActiveView(this.activeGroup.view);
+    }
+    this.renderLayout();
+    for (const x of this.groups()) x.el.classList.toggle("active", x === this.activeGroup);
+  }
+
+  /** Fold a group's tabs into its neighbour (the previous group, or the next for the first). */
+  collapseGroup(g: Group = this.activeGroup): void {
+    const gs = this.groups();
+    if (gs.length < 2) return;
+    const i = gs.indexOf(g);
+    const into = gs[i - 1] ?? gs[i + 1];
+    const keep = g.active;
+    for (const t of [...g.tabs]) this.moveTab(t, into, into.tabs.length);
+    if (this.groups().includes(g)) this.removeGroup(g);
+    const shown = keep && into.tabs.find((t) => t.key === keep.key);
+    if (shown) this.focusTab(shown);
+  }
+
+  joinAllGroups(): void {
+    while (this.groups().length > 1) this.collapseGroup(this.groups()[this.groups().length - 1]);
+  }
+
+  /** Next (+1) or previous (-1) tab in the active group. */
+  cycleTab(step: number): void {
+    const g = this.activeGroup;
+    if (!g.tabs.length) return;
+    const i = g.active ? g.tabs.indexOf(g.active) : -1;
+    this.focusTab(g.tabs[(i + step + g.tabs.length) % g.tabs.length]);
+  }
+
+  /** Next (+1) or previous (-1) group. */
+  cycleGroup(step: number): void {
+    const gs = this.groups();
+    this.focusGroup((gs.indexOf(this.activeGroup) + step + gs.length) % gs.length);
+  }
+
+  focusGroup(n: number): void {
+    const g = this.groups()[n];
+    if (!g) return;
+    if (g.active) this.focusTab(g.active);
+    else this.setActiveGroup(g);
   }
 
   fileRenamed(from: string, to: string): void {
-    const tab = this.tabs.find((x) => x.key === `file:${from}`);
-    if (!tab) return;
-    tab.key = `file:${to}`;
-    tab.state = { path: to };
-    tab.button.querySelector(".tab-title")!.textContent = basename(to);
+    const tabs = this.allTabs().filter((x) => x.key === `file:${from}`);
+    if (!tabs.length) return;
+    for (const tab of tabs) {
+      tab.key = `file:${to}`;
+      tab.state = { path: to };
+      tab.title = basename(to);
+      tab.button.querySelector(".tab-title")!.textContent = tab.title;
+    }
     this.editor.rename(from, to);
   }
 
   fileRemoved(path: string): void {
-    const tab = this.tabs.find((x) => x.key === `file:${path}`);
-    if (tab) {
-      this.editor.close(path);
-      tab.type = "gone";
-      this.closeTab({ ...tab, type: "x" } as Tab);
-    }
+    for (const tab of this.allTabs().filter((x) => x.key === `file:${path}`)) this.closeTab(tab, true);
   }
 
   private refreshTabButton(path: string): void {
-    const tab = this.tabs.find((x) => x.key === `file:${path}`);
-    tab?.button.classList.toggle("dirty", this.editor.isDirty(path));
+    const dirty = this.editor.isDirty(path);
+    for (const tab of this.allTabs()) if (tab.key === `file:${path}`) tab.button.classList.toggle("dirty", dirty);
   }
 
   activeFile(): string | null {
-    return this.activeTab?.type === "file" ? this.activeTab.state.path : null;
+    const t = this.activeGroup?.active;
+    return t?.type === "file" ? t.state.path : null;
+  }
+
+  /** Every file open in a tab (for Save all). */
+  openFiles(): string[] {
+    return [...new Set(this.allTabs().filter((t) => t.type === "file").map((t) => t.state.path as string))];
   }
 
   isRecipe(path: string | null): path is string {
     return !!path && !!this.paths && path.startsWith(this.paths.recipes) && path.endsWith(".py");
   }
 
-  private renderCrumbs(): void {
-    clear(this.crumbs);
-    const p = this.activeFile();
+  private renderCrumbs(g: Group): void {
+    clear(g.crumbs);
+    const p = g.active?.type === "file" ? (g.active.state.path as string) : null;
     if (!p) return;
     const rel = this.paths && p.startsWith(this.paths.workspace) ? p.slice(this.paths.workspace.length + 1) : p;
     const b = this.editor.buffers.get(p);
-    this.crumbs.append(h("span", null, rel.split("/").join(" › ")));
-    if (b?.readonly) this.crumbs.append(h("span", { class: "badge" }, "built-in · read only"), h("button", { class: "btn sm", onclick: () => this.executeCommand("function.fork", basename(p).replace(/^builtin:/, "").replace(/\.py$/, "")) }, "Fork to edit"));
-    if (this.editor.streams.isStreaming(p)) this.crumbs.append(h("span", { class: "live" }, "● copilot writing"));
+    g.crumbs.append(h("span", null, rel.split("/").join(" › ")));
+    if (b?.readonly) g.crumbs.append(h("span", { class: "badge" }, "built-in · read only"), h("button", { class: "btn sm", onclick: () => this.executeCommand("function.fork", basename(p).replace(/^builtin:/, "").replace(/\.py$/, "")) }, "Fork to edit"));
+    if (this.editor.streams.isStreaming(p)) g.crumbs.append(h("span", { class: "live" }, "● copilot writing"));
   }
 
-  private renderTabActions(): void {
-    clear(this.tabActions);
-    const p = this.activeFile();
+  private renderTabActions(g: Group): void {
+    clear(g.tabActions);
+    const p = g.active?.type === "file" ? (g.active.state.path as string) : null;
     if (!this.isRecipe(p)) return;
-    this.tabActions.append(h("button", { class: "btn", onclick: () => this.executeCommand("recipe.plan") }, "Plan"));
-    if (this.commands.has("blackhole.runOnVm")) this.tabActions.append(h("button", { class: "btn pri", onclick: () => this.executeCommand("blackhole.runOnVm", p) }, "Run on VM ▸"));
+    g.tabActions.append(h("button", { class: "btn", onclick: () => { this.focusTab(g.active!); this.executeCommand("recipe.plan"); } }, "Plan"));
+    if (this.commands.has("blackhole.runOnVm")) g.tabActions.append(h("button", { class: "btn pri", onclick: () => this.executeCommand("blackhole.runOnVm", p) }, "Run on VM ▸"));
+  }
+
+  /** The active group's copilot change bar (kept for callers of the single-editor shell). */
+  get hunkbar(): HTMLElement {
+    return this.activeGroup.hunkbar;
   }
 
   renderHunkbar(file: string): void {
-    if (file !== this.activeFile()) return;
-    const hunks = this.editor.streams.hunks(file).filter((x) => x.kind === "copilot" && x.state === "pending");
-    clear(this.hunkbar);
-    this.hunkbar.classList.toggle("hidden", hunks.length === 0);
-    this.renderCrumbs();
-    if (!hunks.length) return;
-    const s = this.editor.streams;
-    this.hunkbar.append(h("span", { class: "tone-warn" }, `Copilot changes · ${hunks.length} pending`));
-    for (const x of hunks.slice(0, 8)) {
-      this.hunkbar.append(h("span", { class: "chip" },
-        h("button", { class: "btn sm", style: "border:0;background:none;padding:0", onclick: () => this.editor.show(file, x.startLine) }, x.startLine === x.endLine ? `L${x.startLine}` : `L${x.startLine}–${x.endLine}`),
-        h("button", { class: "btn sm", "aria-label": `Accept lines ${x.startLine} to ${x.endLine}`, onclick: () => s.acceptHunk(x.id) }, "✓"),
-        h("button", { class: "btn sm", "aria-label": `Reject lines ${x.startLine} to ${x.endLine}`, onclick: () => s.rejectHunk(x.id) }, "✕")));
+    for (const g of this.groups()) {
+      if (g.active?.type !== "file" || g.active.state.path !== file) continue;
+      const bar = g.hunkbar;
+      const hunks = this.editor.streams.hunks(file).filter((x) => x.kind === "copilot" && x.state === "pending");
+      clear(bar);
+      bar.classList.toggle("hidden", hunks.length === 0);
+      this.renderCrumbs(g);
+      if (!hunks.length) continue;
+      const s = this.editor.streams;
+      bar.append(h("span", { class: "tone-warn" }, `Copilot changes · ${hunks.length} pending`));
+      for (const x of hunks.slice(0, 8)) {
+        bar.append(h("span", { class: "chip" },
+          h("button", { class: "btn sm", style: "border:0;background:none;padding:0", onclick: () => this.editor.show(file, x.startLine, g.view) }, x.startLine === x.endLine ? `L${x.startLine}` : `L${x.startLine}–${x.endLine}`),
+          h("button", { class: "btn sm", "aria-label": `Accept lines ${x.startLine} to ${x.endLine}`, onclick: () => s.acceptHunk(x.id) }, "✓"),
+          h("button", { class: "btn sm", "aria-label": `Reject lines ${x.startLine} to ${x.endLine}`, onclick: () => s.rejectHunk(x.id) }, "✕")));
+      }
+      bar.append(h("span", { style: "flex:1" }),
+        h("button", { class: "btn sm", onclick: () => s.rejectAll(file) }, "Reject all"),
+        h("button", { class: "btn sm pri", onclick: () => s.acceptAll(file) }, "Accept all"));
     }
-    this.hunkbar.append(h("span", { style: "flex:1" }),
-      h("button", { class: "btn sm", onclick: () => s.rejectAll(file) }, "Reject all"),
-      h("button", { class: "btn sm pri", onclick: () => s.acceptAll(file) }, "Accept all"));
   }
 
   // ---- commands and keys ---------------------------------------------------
@@ -421,7 +823,7 @@ export class Shell {
   registerCommand(c: CommandDef): void {
     if (this.commands.has(c.id)) throw new Error(`command exists: ${c.id}`);
     this.commands.set(c.id, c);
-    if (c.id === "blackhole.runOnVm") this.renderTabActions();
+    if (c.id === "blackhole.runOnVm") this.groups().forEach((g) => this.renderTabActions(g));
   }
 
   async executeCommand(id: string, ...args: any[]): Promise<unknown> {
@@ -434,13 +836,30 @@ export class Shell {
   }
 
   private onKey(e: KeyboardEvent): void {
-    for (const c of this.commands.values()) {
-      if (c.keybinding && matches(c.keybinding, e)) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.executeCommand(c.id).catch((err) => toast(String(err.message ?? err), "error"));
-        return;
-      }
+    if (e.defaultPrevented || document.querySelector(".overlay")) return;
+    const t = e.target as HTMLElement | null;
+    const inMonaco = !!t?.closest?.(".monaco-editor");
+    const inField = !inMonaco && !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+    const run = (id: string, args: unknown[] = []) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.executeCommand(id, ...args).catch((err) => toast(String(err.message ?? err), "error"));
+    };
+    for (const b of KEYMAP) {
+      if (!matches(b.keys, e) || !this.commands.has(b.command)) continue;
+      // Plain keys (no Cmd/Ctrl) keep their meaning in text fields and terminals.
+      if (inField && !/(cmd|ctrl)\+/i.test(b.keys)) return;
+      if (b.keys === "Shift+Tab" && inMonaco && this.editor.view()?.editor.getSelections()?.some((s) => !s.isEmpty())) return;
+      return run(b.command, b.args);
+    }
+    for (const c of this.commands.values()) if (c.keybinding && matches(c.keybinding, e)) return run(c.id);
+  }
+
+  toggleSidebar(): void {
+    if (this.sidebar.classList.contains("hidden")) this.showActivity(this.activeActivity ?? "recipes");
+    else {
+      this.sidebar.classList.add("hidden");
+      for (const x of this.activities.values()) x.button.classList.remove("on");
     }
   }
 
@@ -478,7 +897,10 @@ export class Shell {
       : s.state === "missing" ? "⚠ Python not found: click to retry"
       : `⚠ blackhole_dev down: click to retry`;
     this.helperItem?.update(t, s.error ?? "Python helper");
-    if (s.state === "ready") for (const b of this.editor.buffers.keys()) this.lintSoon(b);
+    if (s.state === "ready") {
+      for (const b of this.editor.buffers.keys()) this.lintSoon(b);
+      helper("functions.list", {}).then((fns) => this.editor.completion.setFunctions(fns)).catch(() => undefined);
+    }
   }
 
   private lintTimers = new Map<string, () => void>();

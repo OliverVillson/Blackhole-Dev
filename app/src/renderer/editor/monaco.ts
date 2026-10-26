@@ -1,4 +1,5 @@
-// Monaco setup and the open-file buffers. One editor instance; each file is a model.
+// Monaco setup and the open-file buffers. One editor per editor group; each file is a model
+// shared by every group that shows it.
 
 import * as monaco from "monaco-editor";
 import EditorWorker from "monaco-editor/editor/editor.worker?worker";
@@ -6,6 +7,7 @@ import { THEME } from "../../shared/theme";
 import type { Problem } from "../../shared/rpc";
 import { bh } from "../bridge";
 import { StreamManager } from "./stream";
+import { CompletionSource, bindTabAutofill, installCompletion } from "./autofill";
 
 (self as unknown as { MonacoEnvironment: monaco.Environment }).MonacoEnvironment = {
   getWorker: () => new EditorWorker(),
@@ -59,40 +61,104 @@ const SEV: Record<Problem["severity"], monaco.MarkerSeverity> = {
   info: monaco.MarkerSeverity.Info,
 };
 
+/** One Monaco editor (an editor group shows its file tabs in one view). */
+export interface EditorView {
+  id: number;
+  editor: monaco.editor.IStandaloneCodeEditor;
+  buffer: Buffer | null;
+  states: Map<string, monaco.editor.ICodeEditorViewState | null>;
+  ghostZone: string | null;
+}
+
+const EDITOR_OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = {
+  theme: "blackhole",
+  automaticLayout: true,
+  fontFamily: "JetBrains Mono, Menlo, monospace",
+  fontSize: 13,
+  lineHeight: 21,
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+  renderLineHighlight: "line",
+  tabSize: 4,
+  insertSpaces: true,
+  padding: { top: 12 },
+  lineDecorationsWidth: 10,
+  bracketPairColorization: { enabled: true },
+  guides: { bracketPairs: "active", indentation: true },
+  stickyScroll: { enabled: true },
+  smoothScrolling: true,
+  cursorBlinking: "smooth",
+  cursorSmoothCaretAnimation: "on",
+  mouseWheelZoom: true,
+  wordBasedSuggestions: "off",
+  suggestSelection: "first",
+  suggest: { preview: true, previewMode: "subwordSmart", showStatusBar: true, insertMode: "replace" },
+  quickSuggestions: { other: true, comments: false, strings: false },
+  model: null,
+};
+
+let nextViewId = 1;
+
 export class EditorManager {
-  readonly editor: monaco.editor.IStandaloneCodeEditor;
+  readonly views: EditorView[] = [];
   readonly buffers = new Map<string, Buffer>();
   readonly streams: StreamManager;
-  private current: Buffer | null = null;
-  private ghostZone: string | null = null;
-  private listeners = { change: new Set<(b: Buffer) => void>(), dirty: new Set<(b: Buffer) => void>(), hunks: new Set<(file: string) => void>() };
+  readonly completion = new CompletionSource();
+  private activeView: EditorView | null = null;
+  private listeners = { change: new Set<(b: Buffer) => void>(), dirty: new Set<(b: Buffer) => void>(), hunks: new Set<(file: string) => void>(), cursor: new Set<(v: EditorView) => void>() };
 
-  constructor(host: HTMLElement) {
-    this.editor = monaco.editor.create(host, {
-      theme: "blackhole",
-      automaticLayout: true,
-      fontFamily: "JetBrains Mono, Menlo, monospace",
-      fontSize: 13,
-      lineHeight: 21,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      renderLineHighlight: "line",
-      tabSize: 4,
-      insertSpaces: true,
-      padding: { top: 12 },
-      lineDecorationsWidth: 10,
-      model: null,
-    });
+  constructor(host?: HTMLElement) {
+    installCompletion(this.completion);
+    if (host) this.createView(host);
     this.streams = new StreamManager({
       model: (file) => this.modelFor(file),
-      cursor: (file) => (this.current?.path === file ? this.editor.getPosition() : null),
+      cursor: (file) => {
+        const v = this.activeView?.buffer?.path === file ? this.activeView : this.views.find((x) => x.buffer?.path === file);
+        return v ? v.editor.getPosition() : null;
+      },
       renderGhost: (file, at, text) => this.renderGhost(file, at, text),
       changed: (file) => this.listeners.hunks.forEach((cb) => cb(file)),
     });
   }
 
+  /** The focused group's editor (the one commands and the anatomy "Insert path" act on). */
+  get editor(): monaco.editor.IStandaloneCodeEditor {
+    return (this.activeView ?? this.views[0]).editor;
+  }
+
+  createView(host: HTMLElement): EditorView {
+    const editor = monaco.editor.create(host, EDITOR_OPTIONS);
+    const v: EditorView = { id: nextViewId++, editor, buffer: null, states: new Map(), ghostZone: null };
+    this.views.push(v);
+    if (!this.activeView) this.activeView = v;
+    editor.onDidFocusEditorWidget(() => this.setActiveView(v));
+    editor.onDidChangeCursorPosition(() => this.listeners.cursor.forEach((cb) => cb(v)));
+    bindTabAutofill(editor, this.completion);
+    return v;
+  }
+
+  disposeView(v: EditorView): void {
+    const i = this.views.indexOf(v);
+    if (i < 0) return;
+    this.views.splice(i, 1);
+    v.editor.setModel(null);
+    v.editor.dispose();
+    if (this.activeView === v) this.activeView = this.views[0] ?? null;
+  }
+
+  setActiveView(v: EditorView): void {
+    if (this.activeView === v) return;
+    this.activeView = v;
+    this.listeners.cursor.forEach((cb) => cb(v));
+  }
+
+  view(): EditorView | null {
+    return this.activeView;
+  }
+
   on(ev: "change" | "dirty", cb: (b: Buffer) => void): () => void;
   on(ev: "hunks", cb: (file: string) => void): () => void;
+  on(ev: "cursor", cb: (v: EditorView) => void): () => void;
   on(ev: keyof EditorManager["listeners"], cb: (x: any) => void): () => void {
     this.listeners[ev].add(cb);
     return () => this.listeners[ev].delete(cb);
@@ -127,23 +193,33 @@ export class EditorManager {
     return this.track({ path, model, saved: model.getAlternativeVersionId(), readonly: !!opts.readonly, isNew: false });
   }
 
-  show(path: string, line?: number): void {
+  show(path: string, line?: number, v: EditorView | null = this.activeView, focus = true): void {
     const b = this.buffers.get(path);
-    if (!b) return;
-    if (this.current && this.current !== b) this.current.view = this.editor.saveViewState();
-    this.current = b;
-    this.editor.setModel(b.model);
-    this.editor.updateOptions({ readOnly: b.readonly });
-    if (b.view) this.editor.restoreViewState(b.view);
+    if (!b || !v) return;
+    if (v.buffer && v.buffer !== b) v.states.set(v.buffer.path, v.editor.saveViewState());
+    v.buffer = b;
+    if (v.editor.getModel() !== b.model) v.editor.setModel(b.model);
+    v.editor.updateOptions({ readOnly: b.readonly });
+    const st = v.states.get(path);
+    if (st) v.editor.restoreViewState(st);
     if (line) {
-      this.editor.revealLineInCenter(line);
-      this.editor.setPosition({ lineNumber: line, column: 1 });
+      v.editor.revealLineInCenter(line);
+      v.editor.setPosition({ lineNumber: line, column: 1 });
     }
-    this.editor.focus();
+    if (!focus) return;
+    this.setActiveView(v);
+    v.editor.focus();
+  }
+
+  /** Detach a view from its file (its tab moved away or closed). */
+  hide(v: EditorView): void {
+    if (v.buffer) v.states.set(v.buffer.path, v.editor.saveViewState());
+    v.buffer = null;
+    v.editor.setModel(null);
   }
 
   active(): Buffer | null {
-    return this.current;
+    return this.activeView?.buffer ?? null;
   }
 
   isDirty(path: string): boolean {
@@ -163,9 +239,9 @@ export class EditorManager {
   close(path: string): void {
     const b = this.buffers.get(path);
     if (!b) return;
-    if (this.current === b) {
-      this.current = null;
-      this.editor.setModel(null);
+    for (const v of this.views) {
+      v.states.delete(path);
+      if (v.buffer === b) this.hide(v);
     }
     b.model.dispose();
     this.buffers.delete(path);
@@ -175,9 +251,9 @@ export class EditorManager {
     const b = this.buffers.get(from);
     if (!b) return;
     const text = b.model.getValue();
-    const wasCurrent = this.current === b;
+    const showing = this.views.filter((v) => v.buffer === b);
     this.close(from);
-    this.load(to, { text }).then(() => wasCurrent && this.show(to));
+    this.load(to, { text }).then(() => showing.forEach((v) => this.show(to, undefined, v)));
   }
 
   setProblems(path: string, problems: Problem[]): void {
@@ -196,20 +272,21 @@ export class EditorManager {
   /** Insert text at the cursor as a normal (undoable) user edit. */
   insertAtCursor(text: string): void {
     const sel = this.editor.getSelection();
-    if (!sel || !this.current || this.current.readonly) return;
+    if (!sel || !this.active() || this.active()!.readonly) return;
     this.editor.executeEdits("insert", [{ range: sel, text, forceMoveMarkers: true }]);
     this.editor.focus();
   }
 
   private renderGhost(file: string, at: { lineNumber: number; column: number } | null, text: string | null): void {
-    this.editor.changeViewZones((acc) => {
-      if (this.ghostZone) acc.removeZone(this.ghostZone);
-      this.ghostZone = null;
-      if (!at || !text || this.current?.path !== file) return;
-      const dom = document.createElement("div");
-      dom.className = "bh-ghost";
-      dom.textContent = text;
-      this.ghostZone = acc.addZone({ afterLineNumber: at.lineNumber, heightInLines: Math.min(12, text.split("\n").length), domNode: dom });
-    });
+    for (const v of this.views)
+      v.editor.changeViewZones((acc) => {
+        if (v.ghostZone) acc.removeZone(v.ghostZone);
+        v.ghostZone = null;
+        if (!at || !text || v.buffer?.path !== file) return;
+        const dom = document.createElement("div");
+        dom.className = "bh-ghost";
+        dom.textContent = text;
+        v.ghostZone = acc.addZone({ afterLineNumber: at.lineNumber, heightInLines: Math.min(12, text.split("\n").length), domNode: dom });
+      });
   }
 }

@@ -4,6 +4,7 @@
 import { h, clear, basename } from "../dom";
 import { bh, helper } from "../bridge";
 import { contextMenu, prompt, toast, type MenuItem } from "../ui";
+import { prettyKeys } from "../keys";
 import type { Shell } from "../shell";
 import type { FunctionInfo, StepsResult } from "../../shared/rpc";
 import { STARTER } from "../../shared/starter";
@@ -115,7 +116,7 @@ export function recipeMenu(shell: Shell, path: string, x: number, y: number, ref
   const items: MenuItem[] = [
     { label: "Open", hint: "↵", run: () => shell.openFile(path) },
     { label: "Overview", run: () => shell.openTab("recipe-overview", { path }) },
-    { label: "Plan (dry run)", hint: "⌘⇧P", run: async () => { await shell.openFile(path); shell.executeCommand("recipe.plan"); } },
+    { label: "Plan (dry run)", hint: prettyKeys("Cmd+Alt+P"), run: async () => { await shell.openFile(path); shell.executeCommand("recipe.plan"); } },
     ...shell.recipeActions.map((a) => ({ label: a.title, hint: a.keybinding?.replace("Cmd+", "⌘"), run: () => a.run(path) })),
     { label: "Export bundle (.bhr)", run: () => shell.executeCommand("recipe.bundle", path) },
     { sep: true, label: "" },
