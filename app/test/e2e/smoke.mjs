@@ -97,11 +97,15 @@ const tabIdx = () => win.evaluate(() => [...document.querySelectorAll(".editor-a
 const t0 = await tabIdx();
 await win.keyboard.press("Shift+Tab");
 assert((await tabIdx()) !== t0, "Shift+Tab switches tab");
-// Tab autofill: type a prefix and press Tab for the dropdown.
+// Completions show as you type; after Escape, Tab opens the dropdown again.
 await win.click("text=first-recipe.py");
 await win.click(".monaco-editor .view-lines");
+await win.waitForFunction(() => !!window.__shell.editor.completion.catalog, null, { timeout: 10000 });
 await win.keyboard.press("Control+End");
-await win.keyboard.type("\nx = Rec");
+await win.keyboard.type("\nx = Rec", { delay: 30 });
+await win.waitForSelector(".suggest-widget.visible", { timeout: 5000 });
+await win.keyboard.press("Escape");
+await win.waitForFunction(() => !document.querySelector(".suggest-widget.visible"));
 await win.keyboard.press("Tab");
 await win.waitForSelector(".suggest-widget.visible", { timeout: 5000 });
 await win.screenshot({ path: join(out, "08-tab-autofill.png") });
@@ -109,6 +113,23 @@ await win.keyboard.press("Tab");
 assert(await win.evaluate(() => window.__shell.editor.view().editor.getModel().getValue().includes("x = Recipe")), "Tab accepts the completion");
 await win.keyboard.press("Control+Z");
 await win.keyboard.press("Control+Z");
+// Recipe completions as you type: function names in recipe.fn(", then its args with signature help.
+await win.keyboard.press("Control+End");
+await win.keyboard.type('\nrecipe.fn("reap-p', { delay: 30 });
+await win.waitForSelector(".suggest-widget.visible", { timeout: 5000 });
+assert(await win.evaluate(() => document.querySelector(".suggest-widget.visible")?.textContent?.includes("reap-prune")), "function names complete as you type");
+await win.screenshot({ path: join(out, "11-recipe-complete.png") });
+await win.keyboard.press("Enter");
+await win.keyboard.press("ArrowRight");
+await win.keyboard.type(", ", { delay: 30 });
+await win.waitForSelector(".parameter-hints-widget.visible", { timeout: 5000 });
+await win.waitForSelector(".suggest-widget.visible", { timeout: 5000 });
+assert(await win.evaluate(() => document.querySelector(".suggest-widget.visible")?.textContent?.includes("ratio=")), "a function's args complete after a comma");
+await win.screenshot({ path: join(out, "12-recipe-args.png") });
+await win.keyboard.press("Escape");
+await win.keyboard.press("Escape");
+assert(await win.evaluate(() => window.__shell.editor.view().editor.getModel().getValue().includes('recipe.fn("reap-prune", ')), "accepting a function name keeps the quotes");
+for (let i = 0; i < 4; i++) await win.keyboard.press("Control+Z");
 
 // Anatomy.
 await win.evaluate(() => window.__shell.showActivity("anatomy"));

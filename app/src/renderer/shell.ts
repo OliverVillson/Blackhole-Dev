@@ -129,7 +129,11 @@ export class Shell {
     this.activeGroup = first;
     first.el.classList.add("active");
     this.renderLayout();
-    this.editor.on("dirty", (b) => this.refreshTabButton(b.path));
+    this.editor.on("dirty", (b) => {
+      this.refreshTabButton(b.path);
+      // a saved function changes what recipes can call
+      if (this.paths && b.path.startsWith(this.paths.functions) && !this.editor.isDirty(b.path)) this.loadCatalog();
+    });
     this.editor.on("change", (b) => this.lintSoon(b.path));
     this.editor.on("hunks", (file) => this.renderHunkbar(file));
     this.right.classList.add("hidden");
@@ -1008,8 +1012,15 @@ export class Shell {
     if (s.state === "ready") {
       for (const b of this.editor.buffers.keys()) this.lintSoon(b);
       helper("functions.list", {}).then((fns) => this.editor.completion.setFunctions(fns)).catch(() => undefined);
+      this.loadCatalog();
     }
   }
+
+  /** What the editor completes in recipes (an older helper without lang.catalog: none). */
+  private loadCatalog = debounce(() => {
+    if (this.helperStatus.state !== "ready") return;
+    helper("lang.catalog", {}).then((c) => this.editor.completion.setCatalog(c)).catch(() => this.editor.completion.setCatalog(null));
+  }, 300);
 
   private lintTimers = new Map<string, () => void>();
 

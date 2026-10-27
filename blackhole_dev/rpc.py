@@ -15,6 +15,7 @@ named-params object. Shapes are the I1 contract in
   functions.list functions.source functions.fork
   analysis.list analysis.source analysis.fork analysis.estimate analysis.run
   model.list model.forkPlan model.fork model.lineage
+  lang.catalog lang.complete lang.signatures lang.hover   (the last three beside the queue, see serve)
 
 Errors: -32001 recipe (data.problems), -32002 model not found, -32003 cancelled,
 -32004 read budget (data.used, data.wanted, data.budget: run again with a bigger budget once
@@ -36,6 +37,7 @@ from typing import Any, Callable
 import blackhole_dev
 
 RECIPE_ERROR, MODEL_NOT_FOUND, CANCELLED, READ_BUDGET = -32001, -32002, -32003, -32004
+FAST = {"lang.complete", "lang.signatures", "lang.hover"}
 
 
 class RpcError(Exception):
@@ -72,6 +74,8 @@ class Helper:
             "analysis.run": self.analysis_run,
             "model.list": self.model_list, "model.forkPlan": self.model_fork_plan, "model.fork": self.model_fork,
             "model.lineage": self.model_lineage,
+            "lang.catalog": self.lang_catalog, "lang.complete": self.lang_complete,
+            "lang.signatures": self.lang_signatures, "lang.hover": self.lang_hover,
         }
         self.stop = False
 
@@ -134,23 +138,48 @@ class Helper:
             self.current = None
             self.cancelled.discard(mid)
 
+    def handle_lang(self, msg: dict) -> dict | None:
+        """handle() for FAST methods on the second worker: no stdout swap, no `current` request."""
+        mid, method = msg.get("id"), msg.get("method")
+        if mid is None:
+            return None
+        if mid in self.cancelled:
+            self.cancelled.discard(mid)
+            return _err(mid, CANCELLED, "cancelled")
+        params = msg.get("params") or {}
+        if not isinstance(params, dict):
+            return _err(mid, -32602, "params must be one object of named values")
+        try:
+            return {"jsonrpc": "2.0", "id": mid, "result": self.methods[method](params)}
+        except KeyError as e:
+            if method not in self.methods:
+                return _err(mid, -32601, f"unknown method {method!r}")
+            return _err(mid, -32602, f"missing param {e}")
+        except Exception as e:  # noqa: BLE001
+            return _err(mid, -32000, f"{type(e).__name__}: {e}", {"traceback": traceback.format_exc()})
+
     def serve(self, inp=None) -> int:
         inp = inp or sys.stdin
         work: queue.Queue = queue.Queue()
+        # editor completions get their own worker so typing never waits behind a plan or an
+        # anatomy read; they only parse the text they are sent and never print.
+        fast: queue.Queue = queue.Queue()
 
-        def worker():
+        def worker(q: queue.Queue, handle: Callable[[dict], dict | None]):
             while True:
-                msg = work.get()
+                msg = q.get()
                 if msg is None:
                     return
-                resp = self.handle(msg)
+                resp = handle(msg)
                 if resp is not None:
                     self.send(resp)
                 if msg.get("method") == "shutdown":
                     self.stop = True
 
-        t = threading.Thread(target=worker, daemon=True)
+        t = threading.Thread(target=worker, args=(work, self.handle), daemon=True)
         t.start()
+        tf = threading.Thread(target=worker, args=(fast, self.handle_lang), daemon=True)
+        tf.start()
         for line in inp:
             line = line.strip()
             if not line:
@@ -170,11 +199,13 @@ class Helper:
                 continue
             if msg.get("method") == "exit":
                 break
-            work.put(msg)
+            (fast if msg.get("method") in FAST else work).put(msg)
             if msg.get("method") == "shutdown":
                 break
         work.put(None)
+        fast.put(None)
         t.join()
+        tf.join()
         return 0
 
     # ------------------------------------------------------------------ lifecycle
@@ -495,6 +526,28 @@ class Helper:
         if a.needs != "none" and m is None:
             raise RpcError(MODEL_NOT_FOUND, "open a model first (Analysis > Model, or anatomy.open)")
         return an.run(a, m, p.get("params") or {}, budget=budget, progress=self.progress)
+
+    # ------------------------------------------------------------------ editor language support
+    def lang_catalog(self, p: dict) -> dict:
+        from blackhole_dev import lang
+        out = lang.catalog(self._models_dirs(p))
+        threading.Thread(target=lang.warm, daemon=True).start()
+        return out
+
+    def _lang_args(self, p: dict) -> tuple:
+        return p.get("text") or "", int(p["line"]), int(p["col"]), str(self._path(p)) if p.get("path") else None
+
+    def lang_complete(self, p: dict) -> dict:
+        from blackhole_dev import lang
+        return lang.complete(*self._lang_args(p))
+
+    def lang_signatures(self, p: dict) -> dict:
+        from blackhole_dev import lang
+        return lang.signatures(*self._lang_args(p))
+
+    def lang_hover(self, p: dict) -> dict:
+        from blackhole_dev import lang
+        return lang.hover(*self._lang_args(p))
 
     def _model_brief(self, m) -> dict | None:
         if m is None:

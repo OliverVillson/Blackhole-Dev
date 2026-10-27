@@ -1,0 +1,3026 @@
+{
+ "recipe": {
+  "ctor": {
+   "params": [
+    {
+     "name": "id",
+     "label": "id: str",
+     "default": null,
+     "required": true,
+     "kwOnly": false
+    },
+    {
+     "name": "version",
+     "label": "version: str='0.1.0'",
+     "default": "0.1.0",
+     "required": false,
+     "kwOnly": false
+    },
+    {
+     "name": "meta",
+     "label": "meta: dict | None=None",
+     "default": null,
+     "required": false,
+     "kwOnly": true
+    },
+    {
+     "name": "**fields",
+     "label": "**fields"
+    }
+   ],
+   "doc": "A schema as Python. Keyword arguments are the schema's top-level fields (title,\ndescription, author, license, tags, parent, base_compat, task, base, data, purpose,\noutputs, targets, footprint, data_policy); `meta` is app/pipeline metadata kept out\nof the blackhole/v1 dict (target device, preset quant label, ...)."
+  },
+  "methods": {
+   "input": {
+    "params": [
+     {
+      "name": "name",
+      "label": "name: str",
+      "default": null,
+      "required": true,
+      "kwOnly": false
+     },
+     {
+      "name": "type",
+      "label": "type: Any='text'",
+      "default": "text",
+      "required": false,
+      "kwOnly": false
+     },
+     {
+      "name": "**spec",
+      "label": "**spec"
+     }
+    ],
+    "doc": "Declare a knob users set (type text|int|float|bool|enum|model|path, or float/int/str/bool);\nspec: default, required, help, min, max, choices, advanced. Returns its reference."
+   },
+   "step": {
+    "params": [
+     {
+      "name": "kind",
+      "label": "kind: str",
+      "default": null,
+      "required": true,
+      "kwOnly": false
+     },
+     {
+      "name": "id",
+      "label": "id: str | None=None",
+      "default": null,
+      "required": false,
+      "kwOnly": false
+     },
+     {
+      "name": "needs",
+      "label": "needs: dict | None=None",
+      "default": null,
+      "required": false,
+      "kwOnly": true
+     },
+     {
+      "name": "gates",
+      "label": "gates: list | None=None",
+      "default": null,
+      "required": false,
+      "kwOnly": true
+     },
+     {
+      "name": "when",
+      "label": "when: Any=True",
+      "default": true,
+      "required": false,
+      "kwOnly": true
+     },
+     {
+      "name": "always",
+      "label": "always: bool=False",
+      "default": false,
+      "required": false,
+      "kwOnly": true
+     },
+     {
+      "name": "**params",
+      "label": "**params"
+     }
+    ],
+    "doc": "Add a stage running op `kind` (ns.op or ns.op@2, or pipeline.<stage>) with its params."
+   },
+   "fn": {
+    "params": [
+     {
+      "name": "name",
+      "label": "name: str",
+      "default": null,
+      "required": true,
+      "kwOnly": false
+     },
+     {
+      "name": "id",
+      "label": "id: str | None=None",
+      "default": null,
+      "required": false,
+      "kwOnly": false
+     },
+     {
+      "name": "select",
+      "label": "select: str | None=None",
+      "default": null,
+      "required": false,
+      "kwOnly": true
+     },
+     {
+      "name": "gates",
+      "label": "gates: list | None=None",
+      "default": null,
+      "required": false,
+      "kwOnly": true
+     },
+     {
+      "name": "when",
+      "label": "when: Any=True",
+      "default": true,
+      "required": false,
+      "kwOnly": true
+     },
+     {
+      "name": "always",
+      "label": "always: bool=False",
+      "default": false,
+      "required": false,
+      "kwOnly": true
+     },
+     {
+      "name": "scores",
+      "label": "scores: Any=None",
+      "default": null,
+      "required": false,
+      "kwOnly": true
+     },
+     {
+      "name": "functions",
+      "label": "functions: list | None=None",
+      "default": null,
+      "required": false,
+      "kwOnly": true
+     },
+     {
+      "name": "pack",
+      "label": "pack: str | None=None",
+      "default": null,
+      "required": false,
+      "kwOnly": true
+     },
+     {
+      "name": "**args",
+      "label": "**args"
+     }
+    ],
+    "doc": "Call a named function. A job function (forkable pipeline stage) becomes a job.fn\nstage; any other becomes a model.edit stage with this one function."
+   },
+   "edit": {
+    "params": [
+     {
+      "name": "steps",
+      "label": "steps: list[dict]",
+      "default": null,
+      "required": true,
+      "kwOnly": false
+     },
+     {
+      "name": "id",
+      "label": "id: str | None=None",
+      "default": null,
+      "required": false,
+      "kwOnly": false
+     },
+     {
+      "name": "**opts",
+      "label": "**opts"
+     }
+    ],
+    "doc": "Several named functions in one model.edit stage: [{\"fn\": \"reaq\", \"avg_bits\": 3.5}, ...]."
+   },
+   "eval": {
+    "params": [
+     {
+      "name": "gates",
+      "label": "gates: list | None=None",
+      "default": null,
+      "required": false,
+      "kwOnly": false
+     },
+     {
+      "name": "**table",
+      "label": "**table"
+     }
+    ],
+    "doc": "The schema's [eval] table: suites and the final gates the receipt checks."
+   },
+   "to_raw": {
+    "params": [],
+    "doc": ""
+   },
+   "schema": {
+    "params": [],
+    "doc": ""
+   },
+   "step_at": {
+    "params": [
+     {
+      "name": "sid",
+      "label": "sid: str",
+      "default": null,
+      "required": true,
+      "kwOnly": false
+     }
+    ],
+    "doc": ""
+   }
+  },
+  "fields": {
+   "title": "Display name of the recipe.",
+   "description": "What the recipe does, for people browsing recipes.",
+   "author": "Who made it (credit BlackHole-Harness for built-ins).",
+   "license": "SPDX licence id, e.g. Apache-2.0.",
+   "tags": "List of short tags: mac, code, moe, ...",
+   "parent": "id@version of the recipe this one was forked from.",
+   "base_compat": "Which base models it was tested on.",
+   "task": "What the result is for (code, chat, ...).",
+   "base": "The Hugging Face id of the base model, e.g. Qwen/Qwen3.6-35B-A3B.",
+   "data": "Calibration / training data table.",
+   "purpose": "Free-text purpose that steers calibration data.",
+   "outputs": "What the run produces (formats, files).",
+   "targets": "Models it runs on: {\"architectures\": [\"moe\", \"hybrid\"]}.",
+   "footprint": "Expected size and memory of the result.",
+   "data_policy": "Where data may come from and what may leave the machine.",
+   "meta": "App/pipeline metadata kept out of the schema: {\"target\": \"mac16\", \"quant\": \"mlx-3bit\"}."
+  },
+  "attrs": {
+   "inputs": "References to inputs: recipe.inputs.prune",
+   "base": "The base model: recipe.base.model (its directory), recipe.base.id",
+   "hw": "Detected hardware: recipe.hw.gpu_mem_gb, recipe.hw.gpu_count, ...",
+   "steps": "The steps added so far",
+   "meta": "App/pipeline metadata"
+  }
+ },
+ "gate": {
+  "params": [
+   {
+    "name": "metric",
+    "label": "metric: str",
+    "default": null,
+    "required": true,
+    "kwOnly": false
+   },
+   {
+    "name": "op",
+    "label": "op: str",
+    "default": null,
+    "required": true,
+    "kwOnly": false
+   },
+   {
+    "name": "value",
+    "label": "value: Any",
+    "default": null,
+    "required": true,
+    "kwOnly": false
+   },
+   {
+    "name": "on_fail",
+    "label": "on_fail: str | None=None",
+    "default": null,
+    "required": false,
+    "kwOnly": false
+   }
+  ],
+  "doc": "A gate: stop the run (or warn) unless `metric op value` holds."
+ },
+ "stepOpts": {
+  "needs": "Explicit inputs: {\"model\": other.model}.",
+  "gates": "Stop (or warn) unless metrics hold: [gate(\"kl\", \"<=\", 0.1)].",
+  "when": "Run only when this holds (a bool or a ${...} reference).",
+  "always": "Run even after an earlier stage failed a gate.",
+  "id": "The stage id other steps use to refer to it (default: from the kind or function name)."
+ },
+ "inputSpec": {
+  "default": "Value used when the user sets nothing.",
+  "required": "The user must set it (simple mode asks only required, non-advanced inputs).",
+  "help": "One line shown next to the knob.",
+  "min": "Smallest allowed number.",
+  "max": "Largest allowed number.",
+  "choices": "Allowed values of an enum input.",
+  "advanced": "Hide the knob in simple mode."
+ },
+ "inputTypes": [
+  "text",
+  "int",
+  "float",
+  "bool",
+  "enum",
+  "model",
+  "path"
+ ],
+ "gateOps": [
+  "!=",
+  "<",
+  "<=",
+  "==",
+  ">",
+  ">="
+ ],
+ "gateMetrics": [
+  "kl",
+  "ppl",
+  "lcb",
+  "agreement",
+  "size_gb",
+  "experts_left",
+  "tok_s"
+ ],
+ "pipeline": {
+  "steps": [
+   {
+    "name": "reap",
+    "doc": "Score experts on calibration text (REAP) and drop the lowest `prune` share."
+   },
+   {
+    "name": "heal",
+    "doc": "Distil the pruned model back toward the original (shortest verified traces, on-policy rounds)."
+   },
+   {
+    "name": "gptq",
+    "doc": "GPTQ int4 of the routed experts (Hessians from calibration text)."
+   },
+   {
+    "name": "reaq",
+    "doc": "REAQ: per-expert bit widths from REAP rank at a fixed average."
+   },
+   {
+    "name": "mlx",
+    "doc": "Export to MLX for Apple silicon (HEX experts, attention GPTQ, head/embed bits)."
+   },
+   {
+    "name": "qheal",
+    "doc": "Heal again around the quantized model."
+   },
+   {
+    "name": "bench",
+    "doc": "LiveCodeBench v6 (and others) on the original and the result."
+   },
+   {
+    "name": "quant",
+    "doc": "Quantize for another runtime."
+   },
+   {
+    "name": "package",
+    "doc": "Pack the result for download."
+   }
+  ],
+  "params": {
+   "prune": {
+    "default": 0.25,
+    "doc": "REAP share of routed experts dropped (best of 2026-10-23: 25%)",
+    "stage": "reap"
+   },
+   "calib_samples": {
+    "default": 256,
+    "doc": "",
+    "stage": "reap"
+   },
+   "gptq_calib": {
+    "default": 64,
+    "doc": "calibration sequences for the GPTQ Hessians (64 was enough on B200)",
+    "stage": "gptq"
+   },
+   "layer_chunk": {
+    "default": 12,
+    "doc": "MoE layers per sequential GPTQ chunk",
+    "stage": "gptq"
+   },
+   "reaq_top": {
+    "default": 0.5,
+    "doc": "share of each layer's experts (by REAP score) on 16-level tables",
+    "stage": "reaq"
+   },
+   "reaq_block": {
+    "default": 32,
+    "doc": "",
+    "stage": "reaq"
+   },
+   "heal_prompts": {
+    "default": 1024,
+    "doc": "fresh calibration-set prompts the teacher answers for distillation",
+    "stage": "heal"
+   },
+   "heal_max_tokens": {
+    "default": 1536,
+    "doc": "",
+    "stage": "heal"
+   },
+   "heal_epochs": {
+    "default": 1.0,
+    "doc": "",
+    "stage": "heal"
+   },
+   "heal_accum": {
+    "default": 8,
+    "doc": "sequences per optimizer step",
+    "stage": "heal"
+   },
+   "heal_lr": {
+    "default": 3e-06,
+    "doc": "1e-5 overfit Flint's attention (held-out KL 0.31 -> 0.40)",
+    "stage": "heal"
+   },
+   "heal_eval_every": {
+    "default": 8,
+    "doc": "optimizer steps between held-out checks (early stopping, best point kept)",
+    "stage": "heal"
+   },
+   "heal_minutes": {
+    "default": 45,
+    "doc": "wall-clock cap on training (0 = none)",
+    "stage": "heal"
+   },
+   "heal_calib": {
+    "default": "",
+    "doc": "prompts for the teacher's answers (\"\" = the job's calibration set; contest = code_contests)",
+    "stage": "heal"
+   },
+   "heal_seq": {
+    "default": 0,
+    "doc": "tokens per training sequence (0 = the job's max_seq); long traces need ~16k",
+    "stage": "heal"
+   },
+   "heal_expert_rank": {
+    "default": 0,
+    "doc": "> 0: the routed experts train too, as rank-r updates merged before quantization",
+    "stage": "heal"
+   },
+   "heal_lora_lr": {
+    "default": 0.0001,
+    "doc": "",
+    "stage": "heal"
+   },
+   "heal_layer_weight": {
+    "default": 0.0,
+    "doc": "> 0: also match every layer's residual stream to the teacher's",
+    "stage": "heal"
+   },
+   "heal_router_weight": {
+    "default": 0.0,
+    "doc": "> 0: routers copy the teacher's preferences among the kept experts",
+    "stage": "heal"
+   },
+   "heal_focus": {
+    "default": 0.0,
+    "doc": "> 0: weight tokens by how much student and teacher disagree (power)",
+    "stage": "heal"
+   },
+   "heal_opd_rounds": {
+    "default": 0,
+    "doc": "on-policy distillation rounds after the first pass (student writes, teacher grades)",
+    "stage": "heal"
+   },
+   "heal_opd_prompts": {
+    "default": 256,
+    "doc": "student answers per round",
+    "stage": "heal"
+   },
+   "heal_opd_minutes": {
+    "default": 60,
+    "doc": "",
+    "stage": "heal"
+   },
+   "qheal_minutes": {
+    "default": 45,
+    "doc": "training cap of the heal around the quantized model",
+    "stage": "qheal"
+   },
+   "heal_samples": {
+    "default": 0,
+    "doc": "> 1 (with heal_calib contest): answers per problem; train on the shortest that passes its tests",
+    "stage": "heal"
+   },
+   "mlx_bits": {
+    "default": 3,
+    "doc": "MLX export: routed experts (GPTQ)",
+    "stage": "mlx"
+   },
+   "mlx_group": {
+    "default": 64,
+    "doc": "",
+    "stage": "mlx"
+   },
+   "mlx_hot": {
+    "default": 0.0,
+    "doc": "share of each layer's experts (by REAP score) on mlx_hot_bits",
+    "stage": "mlx"
+   },
+   "mlx_hot_bits": {
+    "default": 4,
+    "doc": "",
+    "stage": "mlx"
+   },
+   "mlx_hex": {
+    "default": 0,
+    "doc": "1: routed experts as HEX per-expert level tables (2**bits levels, block 32, fp8 scales)",
+    "stage": "mlx"
+   },
+   "mlx_attn_bits": {
+    "default": 4,
+    "doc": "attention, shared experts, dense MLPs",
+    "stage": "mlx"
+   },
+   "mlx_attn_gptq": {
+    "default": 1,
+    "doc": "GPTQ (1) or round-to-nearest (0) for those and the LM head",
+    "stage": "mlx"
+   },
+   "mlx_qo_bits": {
+    "default": 0,
+    "doc": "q/o projections (the big attention matrices); 0 = mlx_attn_bits",
+    "stage": "mlx"
+   },
+   "mlx_head_vocab": {
+    "default": 0,
+    "doc": "output-only vocab trim: LM head rows kept (0 = all)",
+    "stage": "mlx"
+   },
+   "mlx_embed_bits": {
+    "default": 4,
+    "doc": "",
+    "stage": "mlx"
+   },
+   "mlx_head_bits": {
+    "default": 6,
+    "doc": "",
+    "stage": "mlx"
+   },
+   "bench": {
+    "default": "lcb-v6",
+    "doc": "LiveCodeBench release (problems new in it) for original vs int4; \"none\" skips",
+    "stage": "bench"
+   },
+   "bench_models": {
+    "default": "original,reaq",
+    "doc": "any of original, int4, reaq, mlx",
+    "stage": "bench"
+   },
+   "bench_limit": {
+    "default": 0,
+    "doc": "0 = every problem of the release",
+    "stage": "bench"
+   },
+   "bench_max_tokens": {
+    "default": 32768,
+    "doc": "reasoning models think for tens of thousands of tokens; 4k cut most off",
+    "stage": "bench"
+   },
+   "bench_file": {
+    "default": "",
+    "doc": "a local jsonl in LiveCodeBench's format instead of the download",
+    "stage": "bench"
+   },
+   "purpose": {
+    "default": "",
+    "doc": "Free-text purpose that steers calibration data.",
+    "stage": "purpose"
+   },
+   "calib": {
+    "default": null,
+    "doc": "REAP (REAPer) setting",
+    "stage": "reap"
+   },
+   "max_seq": {
+    "default": null,
+    "doc": "REAP (REAPer) setting",
+    "stage": "reap"
+   },
+   "teacher_backend": {
+    "default": null,
+    "doc": "REAP (REAPer) setting",
+    "stage": "reap"
+   },
+   "answer_max_tokens": {
+    "default": null,
+    "doc": "REAP (REAPer) setting",
+    "stage": "reap"
+   }
+  },
+  "checked": true
+ },
+ "functions": [
+  {
+   "name": "add-noise",
+   "per": "tensor",
+   "doc": "Gaussian noise relative to each tensor's std (robustness probes, symmetry breaking for\nduplicated experts).",
+   "params": {
+    "std": {
+     "type": "float",
+     "default": 0.01,
+     "required": false
+    },
+    "seed": {
+     "type": "int",
+     "default": 0,
+     "required": false
+    },
+    "select": {
+     "type": "str",
+     "default": "",
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "bench",
+   "per": "job",
+   "doc": "LiveCodeBench pass@1 (Python-only prompt, verbatim) of the models named in `models`: any\nof original, pruned, healed, int4, reaq, mlx, or a folder path. One sample per problem, up\nto `max_tokens` (reasoning models think for tens of thousands of tokens), the problems new\nin `release` (or your own `file` in LiveCodeBench's jsonl format; `limit` > 0 takes the\nfirst n). `budgets` also scores thinking budgets by budget forcing (vLLM only; \"\" = none).\nEach model runs in its own process so the GPU is free between them; a result whose model\nfolder and settings did not change is reused (the original once per model and settings,\nacross jobs). Writes work/bench.json; the package step puts it on the model card.\n\nNone takes the pipeline's bench knobs (bench \"lcb-v6\", bench_models, bench_limit,\nbench_max_tokens, bench_budgets, bench_file), so this runs exactly what the pipeline's own\nbench stage would; bench = \"none\" there (and no release here) skips it.",
+   "params": {
+    "release": {
+     "type": "str",
+     "default": null,
+     "required": false
+    },
+    "models": {
+     "type": "str",
+     "default": null,
+     "required": false
+    },
+    "limit": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "max_tokens": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "budgets": {
+     "type": "str",
+     "default": null,
+     "required": false
+    },
+    "file": {
+     "type": "str",
+     "default": null,
+     "required": false
+    },
+    "rerun": {
+     "type": "bool",
+     "default": false,
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "calibrate",
+   "per": "job",
+   "doc": "Get the job ready for the GPU stages: detect the model (config + weight index), plan the\nrun on this machine, download the weights, and have the teacher (the original model, in\nvLLM when it can) write the calibration set: `samples` prompts from `calib` (chat, code,\nmath, mix, contest, or a file) and their answers, plus the held-out set every KL is measured\non. With `reuse`, an earlier job on the same model and purpose donates its calibration set\nand REAP scores, so the teacher is skipped. None leaves a knob as the pipeline has it\n(calib \"mix\", samples 256, REAPer's max_seq).",
+   "params": {
+    "calib": {
+     "type": "str",
+     "default": null,
+     "required": false
+    },
+    "purpose": {
+     "type": "str",
+     "default": null,
+     "required": false
+    },
+    "samples": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "max_seq": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "reuse": {
+     "type": "bool",
+     "default": true,
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "clip-outliers",
+   "per": "tensor",
+   "doc": "Clip every weight beyond sigma standard deviations of its tensor.",
+   "params": {
+    "sigma": {
+     "type": "float",
+     "default": 6.0,
+     "required": false
+    },
+    "select": {
+     "type": "str",
+     "default": "layers[*].attn",
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "distil",
+   "per": "job",
+   "doc": "Distil the REAP-pruned student from the original model (the pipeline's heal stage).\nThe teacher's answers are the training data unless `data` names a jsonl of rows\n{\"ids\": [...], \"start\": n} (prompt + answer token ids, answer from `start`), or an earlier\nstep (traces, your own data function) already wrote work/heal_data.jsonl. Forward KL on the\nanswer tokens; routed experts, embedding and LM head stay frozen unless expert_rank > 0\n(low-rank expert updates); layer_weight / router_weight add layer and router matching;\nopd_rounds > 0 adds on-policy rounds (the student writes, the teacher grades every token).\nEarly stopping on the held-out KL keeps the best point (keep_weights \"kl\"), or \"last\"\ntrains through. Writes <pruned>-healed when it beats the start.\n\nNone leaves a knob as the pipeline has it (blackhole_pipeline.DEFAULTS: prompts 1024,\nmax_tokens 1536, epochs 1.0, accum 8, lr 3e-6, eval_every 8, minutes 45, expert_rank 0,\nlora_lr 1e-4, layer_weight 0, router_weight 0, focus 0, opd_rounds 0, opd_prompts 256,\nopd_minutes 60, keep_weights \"kl\"), or as an earlier step set it.",
+   "params": {
+    "data": {
+     "type": "str",
+     "default": "",
+     "required": false
+    },
+    "prompts": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "calib": {
+     "type": "str",
+     "default": null,
+     "required": false
+    },
+    "max_tokens": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "samples": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "think_budget": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "epochs": {
+     "type": "float",
+     "default": null,
+     "required": false
+    },
+    "accum": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "lr": {
+     "type": "float",
+     "default": null,
+     "required": false
+    },
+    "eval_every": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "minutes": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "seq": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "expert_rank": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "lora_lr": {
+     "type": "float",
+     "default": null,
+     "required": false
+    },
+    "layer_weight": {
+     "type": "float",
+     "default": null,
+     "required": false
+    },
+    "router_weight": {
+     "type": "float",
+     "default": null,
+     "required": false
+    },
+    "focus": {
+     "type": "float",
+     "default": null,
+     "required": false
+    },
+    "opd_rounds": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "opd_prompts": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "opd_minutes": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "keep_weights": {
+     "type": "str",
+     "default": null,
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "drop-experts",
+   "per": "model",
+   "doc": "Drop the experts a query matches (every MoE layer must end with the same count).",
+   "params": {
+    "select": {
+     "type": "str",
+     "default": "experts[rank<0.25]",
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "drop-layers",
+   "per": "model",
+   "doc": "Drop whole decoder layers (measured badly on Qwen3-8B: -4 layers cost KL 0.99).",
+   "params": {
+    "ids": {
+     "type": "list",
+     "default": [],
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "duplicate-layers",
+   "per": "model",
+   "doc": "Depth up-scaling: insert a copy of each listed layer right after it (heal afterwards).",
+   "params": {
+    "ids": {
+     "type": "list",
+     "default": [],
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "fake-quant",
+   "per": "tensor",
+   "doc": "Replace weights with their round-to-nearest value in `format` (to measure a format's\neffect end to end on a model that stays 16-bit).",
+   "params": {
+    "format": {
+     "type": "str",
+     "default": "int4",
+     "required": false
+    },
+    "select": {
+     "type": "str",
+     "default": "",
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "fp8-experts",
+   "per": "job",
+   "doc": "REAPer's quant stage: the pruned (healed) model with its routed experts in fp8, the\nsimple vLLM-servable folder REAP classic ships.",
+   "params": {},
+   "origin": "builtin"
+  },
+  {
+   "name": "freeze",
+   "per": "model",
+   "doc": "Mark the matched parts frozen for training stages (heal, distil).",
+   "params": {
+    "select": {
+     "type": "str",
+     "default": "layers[*]",
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "gptq",
+   "per": "job",
+   "doc": "GPTQ int4 (group 128) on the routed experts of the pruned (healed, if distil ran) model,\nsequentially in chunks of `layer_chunk` MoE layers with Hessians from `calib` calibration\nsequences (pipeline defaults 12 and 64: 64 were enough on B200), measured against the\nteacher and written as a compressed-tensors W4A16 checkpoint that vLLM serves.",
+   "params": {
+    "calib": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "layer_chunk": {
+     "type": "int",
+     "default": null,
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "hex-pack",
+   "per": "model",
+   "doc": "Write the HEX-quantized model in the packed codebook layout (indices, fp8 block scales,\nexpert scales, tables per tier) that the pipeline's HEX kernels and loaders read. Needs\nhex-quantize first. Non-expert tensors are copied as they are.",
+   "params": {
+    "dst": {
+     "type": "str",
+     "default": "",
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "hex-quantize",
+   "per": "model",
+   "doc": "HEX: per-expert learned level tables (REAQ marks from `reaq` decide 8 or 16 levels per\nexpert, else `levels`), fp8 block scales, GPTQ rounding onto the tables when `calib` texts\nare given (nearest-level otherwise). Writes the dequantized weights back into the experts\n(the saved model loads anywhere) and keeps the headers for hex-pack.",
+   "params": {
+    "levels": {
+     "type": "int",
+     "default": 8,
+     "required": false
+    },
+    "block": {
+     "type": "int",
+     "default": 32,
+     "required": false
+    },
+    "calib": {
+     "type": "list",
+     "default": [],
+     "required": false
+    },
+    "gptq": {
+     "type": "bool",
+     "default": true,
+     "required": false
+    },
+    "max_seq": {
+     "type": "int",
+     "default": 2048,
+     "required": false
+    },
+    "device": {
+     "type": "str",
+     "default": "cpu",
+     "required": false
+    },
+    "select": {
+     "type": "str",
+     "default": "experts",
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "merge-similar-experts",
+   "per": "model",
+   "doc": "In every MoE layer, merge the `pairs` most similar pairs of experts among the `among`\nlowest-scored share (all experts when there are no scores). Similarity is the cosine of the\nsame `sketch` randomly chosen weights of every expert, so it reads a few KB per expert.\nEach merge leaves one expert fewer, so give every layer the same `pairs`.",
+   "params": {
+    "pairs": {
+     "type": "int",
+     "default": 1,
+     "required": false
+    },
+    "among": {
+     "type": "float",
+     "default": 0.5,
+     "required": false
+    },
+    "sketch": {
+     "type": "int",
+     "default": 4096,
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "mlx-export",
+   "per": "job",
+   "doc": "An MLX folder for Apple silicon from the pruned (healed) model: routed experts GPTQ'd to\n`bits` (or, with hex = 1, HEX per-expert learned tables of 2**bits levels, fp8 block scales),\nthe `hot` share of each layer's experts by REAP score on `hot_bits` (REAQ tiers),\nattention / shared experts / dense MLPs at `attn_bits` (q/o at `qo_bits`), embeddings and\nLM head at their own bits. head_vocab > 0 trims the output vocab (measured on Qwen3.6: KL\n0.070 -> 0.389 for 0.2 GB; leave it 0). think_budget caps thinking at run time (newer\npipelines). None leaves a knob as the pipeline has it (bits 3, group 64, hex 0, hot 0,\nhot_bits 4, attn_bits 4, attn_gptq 1, embed_bits 4, head_bits 6).",
+   "params": {
+    "bits": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "group": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "hex": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "hot": {
+     "type": "float",
+     "default": null,
+     "required": false
+    },
+    "hot_bits": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "attn_bits": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "attn_gptq": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "qo_bits": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "head_vocab": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "embed_bits": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "head_bits": {
+     "type": "int",
+     "default": null,
+     "required": false
+    },
+    "think_budget": {
+     "type": "int",
+     "default": null,
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "package",
+   "per": "job",
+   "doc": "Model cards, receipt.json and RESULTS.md in the job folder, from what every earlier\nstep measured (KL, top-1, size, bench), and links to the finished models in <job>/out.",
+   "params": {},
+   "origin": "builtin"
+  },
+  {
+   "name": "prune-neurons",
+   "per": "model",
+   "doc": "Drop the `ratio` lowest-importance intermediate channels of every dense MLP the query\nmatches (weight-norm importance; heal afterwards: the dense default prunes 12.5 to 25%).",
+   "params": {
+    "ratio": {
+     "type": "float",
+     "default": 0.125,
+     "required": false
+    },
+    "select": {
+     "type": "str",
+     "default": "layers[*].mlp",
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "qheal",
+   "per": "job",
+   "doc": "Heal AFTER quantization (a BlackHole-Harness original): the student is loaded as exactly\nthe MLX folder the mlx step wrote (dequantized); routed experts, embedding and LM head stay\nfrozen at their low-bit values, attention, shared experts and dense MLPs train behind a\nstraight-through rounding on the folder's own grid, so the gains survive re-quantization.\nTrains on the same data as distil (work/heal_data.jsonl) with distil's knobs; `minutes`\ncaps the training (pipeline default 45). Writes <mlx folder>-healed and points the bench at\nit only if it beats the quantized start; otherwise the unhealed folder stands.",
+   "params": {
+    "minutes": {
+     "type": "int",
+     "default": null,
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "quant",
+   "per": "model",
+   "doc": "Give the matched parts a storage format (bf16, fp8, intN, mlxN, nvfp4, hex3, hex4, ...).",
+   "params": {
+    "select": {
+     "type": "str",
+     "default": "layers[*]",
+     "required": false
+    },
+    "format": {
+     "type": "str",
+     "default": "int4",
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "reap-gpu",
+   "per": "job",
+   "doc": "REAP on the GPU (REAPer's pipeline): score every routed expert by router weight x\nexpert output norm over the calibration set, drop the `ratio` lowest-scored per layer\n(pipeline default 0.25; never past 0.5), write the pruned checkpoint, and with `measure`\ncompare it with the teacher (held-out KL and top-1). Runs calibrate first when it has not\nrun. The anatomy functions reap-score / reap-prune do the same on the CPU of any machine.",
+   "params": {
+    "ratio": {
+     "type": "float",
+     "default": null,
+     "required": false
+    },
+    "measure": {
+     "type": "bool",
+     "default": true,
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "reap-prune",
+   "per": "model",
+   "doc": "REAP: drop the `ratio` lowest-scored experts of every MoE layer (the same count in\nevery layer, never below top-k). Needs scores (`scores` on the stage, or load_scores).",
+   "params": {
+    "ratio": {
+     "type": "float",
+     "default": 0.25,
+     "required": false
+    },
+    "min_keep": {
+     "type": "int",
+     "default": 0,
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "reap-score",
+   "per": "model",
+   "doc": "REAP saliency of every expert over the calibration texts (router weight x expert output\nnorm, averaged over the tokens routed to it), written onto the experts as score / freq /\nrank. `calib` is a list of texts or token-id lists, or a path to a .jsonl / .txt file.",
+   "params": {
+    "calib": {
+     "type": "list",
+     "default": [],
+     "required": false
+    },
+    "max_seq": {
+     "type": "int",
+     "default": 2048,
+     "required": false
+    },
+    "device": {
+     "type": "str",
+     "default": "cpu",
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "reaq",
+   "per": "model",
+   "doc": "REAQ: REAP scores pick each expert's format so the average lands at avg_bits.",
+   "params": {
+    "avg_bits": {
+     "type": "float",
+     "default": 3.5,
+     "required": false
+    },
+    "hi": {
+     "type": "str",
+     "default": "hex4",
+     "required": false
+    },
+    "lo": {
+     "type": "str",
+     "default": "hex3",
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "reaq-codebook",
+   "per": "job",
+   "doc": "REAQ per-expert codebooks on the GPU (a BlackHole-Harness original): the `top` share of\neach layer's experts by REAP score get 16-level learned tables, the rest 8-level, blocks of\n`block` weights with fp8 scales, GPTQ rounding onto the tables (pipeline defaults 0.5 and\n32). Measured against the teacher and int4; the packed indices, tables and scales are\nsaved. The anatomy functions reaq + hex-quantize do the same on the CPU.",
+   "params": {
+    "top": {
+     "type": "float",
+     "default": null,
+     "required": false
+    },
+    "block": {
+     "type": "int",
+     "default": null,
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "reorder-by-score",
+   "per": "model",
+   "doc": "Sort every MoE layer's experts by REAP score, highest first: hot experts get the low\nids, one contiguous range per tier for tiered kernels and hot/cold placement.",
+   "params": {},
+   "origin": "builtin"
+  },
+  {
+   "name": "router-temperature",
+   "per": "part",
+   "doc": "Divide router logits by t (t > 1 spreads the load, t < 1 sharpens the routing).",
+   "params": {
+    "t": {
+     "type": "float",
+     "default": 1.0,
+     "required": false
+    },
+    "select": {
+     "type": "str",
+     "default": "layers[*].moe.router",
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "scale",
+   "per": "tensor",
+   "doc": "Multiply the matched weights by `factor`.",
+   "params": {
+    "factor": {
+     "type": "float",
+     "default": 1.0,
+     "required": false
+    },
+    "select": {
+     "type": "str",
+     "default": "",
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "traces",
+   "per": "job",
+   "doc": "Verified shortest-trace distillation data (a BlackHole-Harness original). The teacher\nsolves `problems` competitive-programming problems (deepmind/code_contests, pre-2022, so\nnot in LiveCodeBench's newer releases, or your own `file` in LiveCodeBench's jsonl format)\n`samples` times each; every answer's code runs against the problem's tests on the CPU, and\n`keep` = \"shortest\" trains the student on the shortest answer that passed (\"all\": every\npassing answer). Only answers that ended on their own count. `think_budget` > 0 cuts\nthinking still open at that many tokens and tells the teacher to answer now (budget forcing).\nWrites work/heal_data.jsonl (rows {ids, start}) for distil, and work/heal_traces.json.",
+   "params": {
+    "problems": {
+     "type": "int",
+     "default": 1024,
+     "required": false
+    },
+    "samples": {
+     "type": "int",
+     "default": 4,
+     "required": false
+    },
+    "max_tokens": {
+     "type": "int",
+     "default": 12288,
+     "required": false
+    },
+    "think_budget": {
+     "type": "int",
+     "default": 0,
+     "required": false
+    },
+    "keep": {
+     "type": "str",
+     "default": "shortest",
+     "required": false
+    },
+    "seed": {
+     "type": "int",
+     "default": 1234,
+     "required": false
+    },
+    "file": {
+     "type": "str",
+     "default": "",
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "train",
+   "per": "model",
+   "doc": "Mark the matched parts trainable for training stages (heal, distil).",
+   "params": {
+    "select": {
+     "type": "str",
+     "default": "layers[*].moe.router",
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "trim-head",
+   "per": "model",
+   "doc": "Output-only vocab trim: keep these token ids (or the JSON list in `file`) in the LM head.",
+   "params": {
+    "keep": {
+     "type": "list",
+     "default": [],
+     "required": false
+    },
+    "file": {
+     "type": "str",
+     "default": "",
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  },
+  {
+   "name": "zero-small",
+   "per": "tensor",
+   "doc": "Unstructured magnitude pruning: zero the smallest `fraction` of every matrix (the file\ndoes not shrink; it measures what a sparse kernel could skip).",
+   "params": {
+    "fraction": {
+     "type": "float",
+     "default": 0.1,
+     "required": false
+    },
+    "select": {
+     "type": "str",
+     "default": "layers[*]",
+     "required": false
+    }
+   },
+   "origin": "builtin"
+  }
+ ],
+ "ops": [
+  {
+   "name": "convert.moefy",
+   "major": 1,
+   "doc": "LAB ONLY: measured negative. On Qwen3-8B (B200, 2026-10-23) 64 experts at top-32 cost\nKL 0.53 (0.39 with an oracle router): SiLU FFNs are not sparse enough to split cleanly,\nand REAP on the new routers pruned about as badly as random (KL 0.67 vs 0.71). Dense\nmodels use score.neurons + prune.neurons; REAP stays for real MoEs.\n\nMoEfication: split every FFN's intermediate neurons into `experts` groups and train a\nsmall router per layer to pick `top_k` of them per token, so the dense model becomes a\nMoE with the same weights. Then REAP can score and drop whole experts, and inference\nonly computes the chosen ones.\n\n  split   cluster   k-means on each neuron's up/gate weight vectors (parameter clustering)\n          coact     balanced graph partition of neuron co-activation on the data (the\n                    MoEfication paper's best split; needs activations, so slower)\n          random    equal random groups (a baseline)\n  router  mlp       a linear (or 2-layer) router trained to predict which groups hold the\n                    largest activations, on `router_tokens` tokens of the data so far\n          centroid  no training: score each expert by the token's similarity to its\n                    neurons' mean weight vector\n  shared  fraction of neurons kept always on as a shared expert (the ones active on most\n          tokens), which the LLaMA-MoE line of work found steadies quality\n\nOutput is a standard MoE checkpoint so every later op and runtime loads it:\nMixtral layout for Llama-style attention, Qwen3-MoE layout for Qwen3 (qk-norm),\nQwen2-MoE layout when attention has biases or a shared expert is kept. Metrics:\nrecon_kl (dense vs moefied on held-out text before any pruning), router_recall (share\nof the true top activation mass the router picks), active_b.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": "text for co-activation statistics and router training (the data so far)"
+    },
+    "experts": {
+     "type": "int",
+     "default": 16,
+     "help": "experts per FFN layer"
+    },
+    "top_k": {
+     "type": "int",
+     "default": 4,
+     "help": "experts per token; active FFN share = top_k / experts"
+    },
+    "split": {
+     "type": "str",
+     "default": "cluster",
+     "help": "cluster | coact | random"
+    },
+    "router": {
+     "type": "str",
+     "default": "mlp",
+     "help": "mlp | centroid"
+    },
+    "router_tokens": {
+     "type": "int",
+     "default": 2000000,
+     "help": "tokens of activations the routers train on"
+    },
+    "router_hidden": {
+     "type": "int",
+     "default": 0,
+     "help": "0 = linear router; >0 = 2-layer MLP of this width"
+    },
+    "shared": {
+     "type": "float",
+     "default": 0.0,
+     "help": "share of neurons kept always on as a shared expert, e.g. 0.125"
+    },
+    "layers": {
+     "type": "str",
+     "default": "all",
+     "help": "all | skip_first_last | a list like 2-29"
+    },
+    "target_format": {
+     "type": "str",
+     "default": "auto",
+     "help": "auto | mixtral | qwen3_moe | qwen2_moe"
+    }
+   }
+  },
+  {
+   "name": "data.dataset",
+   "major": 1,
+   "doc": "A public or local dataset, filtered to the licence allow-list in data_policy.",
+   "params": {
+    "source": {
+     "type": "str",
+     "default": "",
+     "help": "hf:<repo>[:split] | path to .jsonl | bhdata kits dir"
+    },
+    "samples": {
+     "type": "int",
+     "default": 0,
+     "help": "0 = all"
+    },
+    "fields": {
+     "type": "dict",
+     "default": {},
+     "help": "column mapping to {prompt, answer}"
+    }
+   }
+  },
+  {
+   "name": "data.decontam",
+   "major": 1,
+   "doc": "Drop rows that share n-grams with eval suites or carry their canaries.",
+   "params": {
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "against": {
+     "type": "list",
+     "default": [
+      "humaneval",
+      "mbpp",
+      "livecodebench"
+     ],
+     "help": "suites and canaries to exclude"
+    },
+    "ngram": {
+     "type": "int",
+     "default": 13,
+     "help": ""
+    }
+   }
+  },
+  {
+   "name": "data.mix",
+   "major": 1,
+   "doc": "Weighted mix of datasets, deduplicated and shuffled.",
+   "params": {
+    "sources": {
+     "type": "list",
+     "default": [],
+     "help": "[{data: ${a.data}, weight: 0.7}, ...]"
+    },
+    "samples": {
+     "type": "int",
+     "default": 0,
+     "help": ""
+    },
+    "seed": {
+     "type": "int",
+     "default": 0,
+     "help": ""
+    }
+   }
+  },
+  {
+   "name": "data.own_rollouts",
+   "major": 1,
+   "doc": "The current model answers prompts; answers that pass a checker (tests, a judge, an\nexact match) become training rows. llmap exp02's 12% -> 80% came from this.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "prompts": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "samples_per_prompt": {
+     "type": "int",
+     "default": 4,
+     "help": ""
+    },
+    "checker": {
+     "type": "str",
+     "default": "tests",
+     "help": "tests | judge:<model> | exact"
+    }
+   }
+  },
+  {
+   "name": "data.teacher_gen",
+   "major": 1,
+   "doc": "The teacher writes prompts for a purpose and answers them. With a purpose it lists\nsub-tasks, writes varied self-contained requests for each, mixes in the closest public\npreset, and answers every prompt; held-out answers are kept back for eval.\n\nOn a B200 the stage's time goes to vLLM startup and the prompt-writer rounds, not the\nanswers, so the port keeps the written topics and prompts as their own cached files\n(keyed by teacher + purpose + writer settings, reused when only samples or answer\nsettings change) and keeps one vLLM server up across the writer and answer rounds.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": "teacher; defaults to the base model"
+    },
+    "purpose": {
+     "type": "str",
+     "default": "",
+     "help": "free text; empty uses the preset in `preset`"
+    },
+    "topics": {
+     "type": "list",
+     "default": [],
+     "help": "sub-skills of the purpose (e.g. from the schema builder); empty = the teacher lists its own"
+    },
+    "preset": {
+     "type": "str",
+     "default": "mix",
+     "help": "mix | chat | code | math | builtin"
+    },
+    "samples": {
+     "type": "int",
+     "default": 64,
+     "help": "prompts to generate and answer; 64 calibration sequences scored as well as 256 on Qwen3-30B-A3B (B200, 2026-10-23)"
+    },
+    "heldout": {
+     "type": "int",
+     "default": 32,
+     "help": "answers kept back for eval"
+    },
+    "purpose_mix": {
+     "type": "float",
+     "default": 0.25,
+     "help": "share taken from the closest public preset"
+    },
+    "answer_max_tokens": {
+     "type": "int",
+     "default": 1024,
+     "help": ""
+    },
+    "max_seq": {
+     "type": "int",
+     "default": 2048,
+     "help": ""
+    },
+    "teacher": {
+     "type": "str",
+     "default": "local",
+     "help": "local (vLLM, else transformers) | frontier:<model> (Claude/GPT, needs a key and spend cap)"
+    },
+    "thinking": {
+     "type": "bool",
+     "default": false,
+     "help": ""
+    }
+   }
+  },
+  {
+   "name": "distil.kd",
+   "major": 1,
+   "doc": "Distil a teacher into a different (usually smaller, dense) student.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": "student; defaults to the last model in the chain"
+    },
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": "training rows"
+    },
+    "epochs": {
+     "type": "float",
+     "default": 1.0,
+     "help": ""
+    },
+    "lr": {
+     "type": "float",
+     "default": 0.0001,
+     "help": ""
+    },
+    "lora_r": {
+     "type": "int",
+     "default": 16,
+     "help": "0 = full fine-tune"
+    },
+    "targets": {
+     "type": "list",
+     "default": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj"
+     ],
+     "help": ""
+    },
+    "train_experts": {
+     "type": "bool",
+     "default": true,
+     "help": ""
+    },
+    "max_len": {
+     "type": "int",
+     "default": 2048,
+     "help": ""
+    },
+    "max_minutes": {
+     "type": "float",
+     "default": 60.0,
+     "help": "wall-clock cap; training stops, merges and saves"
+    },
+    "student": {
+     "type": "str",
+     "default": "",
+     "help": "HF id of the student when it is not the chain's model"
+    },
+    "teacher": {
+     "type": "str",
+     "default": "${base.model}",
+     "help": ""
+    },
+    "kd_weight": {
+     "type": "float",
+     "default": 1.0,
+     "help": ""
+    },
+    "temperature": {
+     "type": "float",
+     "default": 1.0,
+     "help": ""
+    }
+   }
+  },
+  {
+   "name": "eval.agreement",
+   "major": 1,
+   "doc": "Model vs teacher on held-out teacher answers. Metrics: top1_agreement, kl,\nppl_teacher, ppl_model.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "teacher": {
+     "type": "str",
+     "default": "${base.model}",
+     "help": ""
+    },
+    "heldout": {
+     "type": "str",
+     "default": "",
+     "help": "e.g. ${calib.heldout}"
+    }
+   }
+  },
+  {
+   "name": "eval.bench",
+   "major": 1,
+   "doc": "Public suites run on the model (vLLM for safetensors, llama-server for GGUF), with\na paired bootstrap interval against the base model's reading. Metrics per suite:\n<suite>, <suite>_lo, <suite>_hi, <suite>_kept (share of the base score).",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "suites": {
+     "type": "list",
+     "default": [
+      "evalplus"
+     ],
+     "help": "evalplus | livecodebench | bfcl | mmlu_pro | judge:<rubric>"
+    },
+    "samples": {
+     "type": "int",
+     "default": 1,
+     "help": "answers per problem (K)"
+    },
+    "compare_base": {
+     "type": "bool",
+     "default": true,
+     "help": ""
+    },
+    "thinking": {
+     "type": "bool",
+     "default": false,
+     "help": ""
+    },
+    "judge": {
+     "type": "str",
+     "default": "",
+     "help": "frontier:<model> for judge suites"
+    }
+   }
+  },
+  {
+   "name": "eval.footprint",
+   "major": 1,
+   "doc": "Measured memory of the model served the way the target will run it: GGUF bytes\n(counted once) plus all buffers of a one-slot llama-server at the schema's context\nand KV type, after a prompt of 3/4 of the context. Metrics: file_gb, footprint_gb,\ntok_s (when the target device class is known), fits.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "context": {
+     "type": "int",
+     "default": 16384,
+     "help": ""
+    },
+    "kv": {
+     "type": "str",
+     "default": "q8_0",
+     "help": ""
+    },
+    "device": {
+     "type": "str",
+     "default": "",
+     "help": "device class for the tok/s estimate, e.g. 8GB-VRAM, M-series-16GB"
+    }
+   }
+  },
+  {
+   "name": "heal.kd",
+   "major": 1,
+   "doc": "Heal a pruned or quantised model toward its unpruned teacher: SFT on the teacher's\nanswers, plus logit KL when kd_weight > 0. NaN/inf steps are skipped.\n\nAlways a trained distillation. A closed-form, no-training heal (refitting the next\nlayer by least squares) made Qwen3-8B worse in every B200 test (2026-10-23), so there\nis no such mode: heal with training, or leave the stage out.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": "student; defaults to the last model in the chain"
+    },
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": "training rows"
+    },
+    "epochs": {
+     "type": "float",
+     "default": 1.0,
+     "help": ""
+    },
+    "lr": {
+     "type": "float",
+     "default": 0.0001,
+     "help": ""
+    },
+    "lora_r": {
+     "type": "int",
+     "default": 16,
+     "help": "0 = full fine-tune"
+    },
+    "targets": {
+     "type": "list",
+     "default": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj"
+     ],
+     "help": ""
+    },
+    "train_experts": {
+     "type": "bool",
+     "default": true,
+     "help": ""
+    },
+    "max_len": {
+     "type": "int",
+     "default": 2048,
+     "help": ""
+    },
+    "max_minutes": {
+     "type": "float",
+     "default": 60.0,
+     "help": "wall-clock cap; training stops, merges and saves"
+    },
+    "teacher": {
+     "type": "str",
+     "default": "${base.model}",
+     "help": ""
+    },
+    "kd_weight": {
+     "type": "float",
+     "default": 0.5,
+     "help": "weight of logit KL to the teacher; 0 = plain SFT"
+    },
+    "fake_quant": {
+     "type": "str",
+     "default": "",
+     "help": "heal against fake-quantised weights of this GGUF type map (final heal)"
+    }
+   }
+  },
+  {
+   "name": "heal.route_anneal",
+   "major": 1,
+   "doc": "Post-train a MoEfied model to route: start with every expert on (exactly the dense\nmodel), then step the active experts down along `schedule`, distilling from the dense\nteacher at each step (router straight-through gate + load-balance aux loss). LAB.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": "MoEfied student; defaults to the last model in the chain"
+    },
+    "teacher": {
+     "type": "str",
+     "default": "${base.model}",
+     "help": ""
+    },
+    "schedule": {
+     "type": "str",
+     "default": "64,48,32,24,16",
+     "help": "experts on per token, one distillation step each"
+    },
+    "max_minutes": {
+     "type": "float",
+     "default": 180.0,
+     "help": "wall-clock budget, split equally over the schedule"
+    },
+    "data": {
+     "type": "dict",
+     "default": {},
+     "help": "mix, e.g. {code = 0.5, chat = 0.3, math = 0.2}"
+    },
+    "lr": {
+     "type": "float",
+     "default": 1e-05,
+     "help": ""
+    },
+    "router_lr": {
+     "type": "float",
+     "default": 0.001,
+     "help": ""
+    },
+    "aux_weight": {
+     "type": "float",
+     "default": 0.01,
+     "help": ""
+    }
+   }
+  },
+  {
+   "name": "lab.script",
+   "major": 1,
+   "doc": "Run a Python file's run(ctx). Inputs are any artifacts passed in `inputs`; the\nscript writes to ctx.out(name) for each name in `outputs` and may report metrics.",
+   "params": {
+    "file": {
+     "type": "str",
+     "default": "",
+     "help": "path to the .py file, relative to the schema"
+    },
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "inputs": {
+     "type": "dict",
+     "default": {},
+     "help": "name -> ${stage.artifact}"
+    },
+    "args": {
+     "type": "dict",
+     "default": {},
+     "help": "free-form params for the script"
+    },
+    "code_sha256": {
+     "type": "str",
+     "default": "",
+     "help": "pinned hash of the file; the cache key includes it"
+    }
+   }
+  },
+  {
+   "name": "merge.lora",
+   "major": 1,
+   "doc": "Merge a LoRA adapter directory into a model.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "adapter": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    }
+   }
+  },
+  {
+   "name": "model.detect",
+   "major": 1,
+   "doc": "Read config.json, the safetensors index and tokenizer_config.json (a few KB, never\nthe weights) and record what the model is: kinds (moe, dense, hybrid, vision), experts,\ntop-k, shared experts, layer split, sizes, dtype, quantisation, KV bytes per token,\nchat template, remote code. The runner adds it as the first stage of every run, puts\nthe result in ${base.*}, and refuses the run if the schema's targets or any stage's\nneeds do not match, before anything is downloaded.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": "Hugging Face id or local directory; defaults to the job's base"
+    }
+   }
+  },
+  {
+   "name": "model.edit",
+   "major": 1,
+   "doc": "Run named functions from blackhole_dev on the model so far and write the result\nas a new checkpoint with a receipt (blackhole-anatomy.json). One stage = one function\n(`fn` with its params flat on the stage) or several (`steps`, a list of {fn, ...} tables).\nStructural edits (REAP pruning, merges, layer splices) are byte copies; weight edits and\nHEX quantization compute on CPU unless the function loads the model (`device`). `scores`\nattaches REAP scores (a saliency artifact) before the functions run; `functions` names\n.py files or modules whose @function definitions the schema uses, pinned by sha256 in\nthe receipt. Every function's returned metrics land in metrics.json (gates read them).",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "fn": {
+     "type": "str",
+     "default": "",
+     "help": "a named function, e.g. reap-prune, reaq, hex-quantize, or your own"
+    },
+    "select": {
+     "type": "str",
+     "default": "",
+     "help": "which parts the function works on (a query), when it takes one"
+    },
+    "args": {
+     "type": "dict",
+     "default": {},
+     "help": "the function's params"
+    },
+    "steps": {
+     "type": "list",
+     "default": [],
+     "help": "several functions in order: [{fn = \"reaq\", avg_bits = 3.5}, ...]"
+    },
+    "scores": {
+     "type": "str",
+     "default": "",
+     "help": "REAP scores to attach first, e.g. ${score.saliency}"
+    },
+    "functions": {
+     "type": "list",
+     "default": [],
+     "help": "modules or .py files (relative to the schema) defining extra functions"
+    },
+    "pack": {
+     "type": "str",
+     "default": "",
+     "help": "\"hex\" writes the packed HEX layout instead of a plain checkpoint"
+    },
+    "force": {
+     "type": "bool",
+     "default": false,
+     "help": "save even if the result would not load with stock loaders"
+    }
+   }
+  },
+  {
+   "name": "model.fetch",
+   "major": 1,
+   "doc": "Download the base model to $BLACKHOLE_HOME/models/<org>--<name>. The runner adds\nthis as the second stage (`weights`) unless the base model is a local directory.",
+   "params": {
+    "revision": {
+     "type": "str",
+     "default": "main",
+     "help": "Hugging Face revision to pin"
+    }
+   }
+  },
+  {
+   "name": "package.gguf",
+   "major": 1,
+   "doc": "The GGUF plus an Ollama Modelfile with the right chat and tool-call template, and\na LM Studio / llama.cpp run line.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "name": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "context": {
+     "type": "int",
+     "default": 16384,
+     "help": ""
+    }
+   }
+  },
+  {
+   "name": "package.hf",
+   "major": 1,
+   "doc": "Model card, schema, receipt and eval next to the safetensors; manifest.sha256.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "name": {
+     "type": "str",
+     "default": "",
+     "help": "default <base>-<schema>"
+    }
+   }
+  },
+  {
+   "name": "plan.fit",
+   "major": 1,
+   "doc": "Pick the gentlest recipe that meets a file-size target by walking a ladder, gentlest\nfirst: quantise harder before pruning. The default ladder is the dense frontier on\nQwen3-8B (B200, 2026-10-23, GPTQ):\n    Q4_K_M            ~6.1 GB  KL 0.028\n    Q3_K_M            ~5.3 GB  KL 0.15   (beats every pruned recipe of similar size)\n    Q3_K_M + 12.5%    ~5.0 GB  KL 0.25\n    Q3_K_M + 25%\nReports metrics later stages read: bits, prune (0 when none), need_prune, predicted_gb,\nfits. If the last rung misses the target, fits is false and the schema's gate stops the\nrun with the reason; layer dropping is never on the ladder (KL 0.99 for 4 layers).\n\nMoE models use the same shape with experts as the prunable part (moe-prune-int4):\n    REAP 25% + Q4_K_M  ~10.4 GB experts  KL 0.034   (Qwen3-30B-A3B, GPTQ)\n    REAP 25% + Q3_K_M\n    REAP 37.5% + Q3_K_M  6.9 GB          KL 0.121   (50% + int4 at the same size: 0.171)\nPruning never goes past 50%: past that every MoE and dense run fell apart.\n\nPlanned (not on the ladder yet): once quant.expert_codebook has a real kernel and a\npacked format, \"REAP 25% + REAQ codebooks\" replaces the Q3_K_M tiers for MoE. Lab\nnumbers (Qwen3-30B-A3B, B200, 2026-10-23, simulated quant): 16/8-level REAQ tables with\nGPTQ rounding KL 0.033 at 9.5 GB vs Q4_K_M rung 0.034 at 10.4 GB; near 9 GB the best goes\nfrom 0.074 (REAP 37.5% + GPTQ int4) to 0.041. Not added now because nothing can serve it.\n\nIt estimates the GGUF file from ${base.params_b} and the prunable share of the weights, so\nit runs on the CPU in a second. The frontier's sizes were safetensors with 16-bit\nembeddings, so GGUF files are smaller (Qwen3-8B Q4_K_M ~5.0 GB); eval.footprint\nmeasures the real file at the end.",
+   "params": {
+    "params_b": {
+     "type": "float",
+     "default": 0.0,
+     "help": "base parameters, e.g. ${base.params_b}"
+    },
+    "ffn_share": {
+     "type": "float",
+     "default": 0.65,
+     "help": "share of weights pruning can remove: FFNs in dense LLMs (~0.6-0.7)"
+    },
+    "prunable_b": {
+     "type": "float",
+     "default": 0.0,
+     "help": "billions of prunable weights instead of ffn_share, e.g. ${base.expert_params_b} for MoE"
+    },
+    "max_gb": {
+     "type": "float",
+     "default": 0.0,
+     "help": "file target; 0 = no target (first rung)"
+    },
+    "ladder": {
+     "type": "list",
+     "default": [
+      {
+       "bits": "Q4_K_M",
+       "prune": 0.0
+      },
+      {
+       "bits": "Q3_K_M",
+       "prune": 0.0
+      },
+      {
+       "bits": "Q3_K_M",
+       "prune": 0.125
+      },
+      {
+       "bits": "Q3_K_M",
+       "prune": 0.25
+      }
+     ],
+     "help": "rungs tried in order, gentlest first"
+    }
+   }
+  },
+  {
+   "name": "prune.neurons",
+   "major": 1,
+   "doc": "Remove the lowest-scored FFN neurons and rewrite the checkpoint with a smaller\nintermediate size per layer (still a standard dense checkpoint every runtime loads).\nProtect rules: the critical set from score.neurons is never removed, the top\n`protect_top` share of each layer is kept, the first and last `skip_edge` layers are\nuntouched, and no layer drops more than `max_layer` of its neurons.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "scores": {
+     "type": "str",
+     "default": "",
+     "help": "e.g. ${score.scores}"
+    },
+    "ratio": {
+     "type": "float",
+     "default": 0.0,
+     "help": "share of FFN neurons removed overall; the dense frontier is still being measured"
+    },
+    "allocation": {
+     "type": "str",
+     "default": "global",
+     "help": "global (rank all layers together, capped by max_layer) | uniform"
+    },
+    "protect_critical": {
+     "type": "bool",
+     "default": true,
+     "help": "never remove neurons score.neurons marked critical"
+    },
+    "protect_top": {
+     "type": "float",
+     "default": 0.01,
+     "help": "share of each layer's best neurons always kept"
+    },
+    "skip_edge": {
+     "type": "int",
+     "default": 2,
+     "help": "first and last layers left whole"
+    },
+    "max_layer": {
+     "type": "float",
+     "default": 0.5,
+     "help": "most any one layer may lose"
+    },
+    "multiple_of": {
+     "type": "int",
+     "default": 64,
+     "help": "round each layer's new size for fast kernels"
+    }
+   }
+  },
+  {
+   "name": "prune.reap",
+   "major": 1,
+   "doc": "Keep the top experts per layer by saliency and rewrite the checkpoint shard by\nshard in its own format (fp8 blocks and MXFP4 survive). CPU only.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "saliency": {
+     "type": "str",
+     "default": "",
+     "help": "e.g. ${score.saliency}"
+    },
+    "ratio": {
+     "type": "float",
+     "default": 0.5,
+     "help": "share of routed experts dropped in every MoE layer"
+    },
+    "keep_groups_even": {
+     "type": "bool",
+     "default": true,
+     "help": "DeepSeek-style groups keep the same count per group"
+    }
+   }
+  },
+  {
+   "name": "prune.structured",
+   "major": 1,
+   "doc": "Dense models: keep a fraction of each FFN's channels and of the KV groups, and drop\nwhole layers, chosen on the data so far. Heal afterwards.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "ffn": {
+     "type": "float",
+     "default": 1.0,
+     "help": "fraction of FFN channels kept"
+    },
+    "kv_groups": {
+     "type": "float",
+     "default": 1.0,
+     "help": "fraction of KV groups kept"
+    },
+    "drop_layers": {
+     "type": "int",
+     "default": 0,
+     "help": "banned in defaults: dropping 4 layers of Qwen3-8B cost KL 0.99"
+    },
+    "layer_drop_samples": {
+     "type": "int",
+     "default": 64,
+     "help": ""
+    }
+   }
+  },
+  {
+   "name": "qat.block_ap",
+   "major": 1,
+   "doc": "Quantisation-aware training block by block: each quantised block is trained to\nreproduce the full-precision block's outputs, then the scales are frozen.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "type_map": {
+     "type": "str",
+     "default": "",
+     "help": "per-tensor GGUF types, e.g. ${map.type_map}"
+    },
+    "tokens": {
+     "type": "int",
+     "default": 4000000,
+     "help": ""
+    }
+   }
+  },
+  {
+   "name": "qat.ste",
+   "major": 1,
+   "doc": "QAT to one GGUF type with straight-through rounding: every weight trains computing\nas llama.cpp will store it. The following quant.gguf must use that type, no imatrix.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": "student; defaults to the last model in the chain"
+    },
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": "training rows"
+    },
+    "epochs": {
+     "type": "float",
+     "default": 1.0,
+     "help": ""
+    },
+    "lr": {
+     "type": "float",
+     "default": 0.0001,
+     "help": ""
+    },
+    "lora_r": {
+     "type": "int",
+     "default": 16,
+     "help": "0 = full fine-tune"
+    },
+    "targets": {
+     "type": "list",
+     "default": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj"
+     ],
+     "help": ""
+    },
+    "train_experts": {
+     "type": "bool",
+     "default": true,
+     "help": ""
+    },
+    "max_len": {
+     "type": "int",
+     "default": 2048,
+     "help": ""
+    },
+    "max_minutes": {
+     "type": "float",
+     "default": 60.0,
+     "help": "wall-clock cap; training stops, merges and saves"
+    },
+    "type": {
+     "type": "str",
+     "default": "Q4_0",
+     "help": ""
+    }
+   }
+  },
+  {
+   "name": "quant.expert_codebook",
+   "major": 1,
+   "doc": "Per-expert codebook quantisation (HEX, Header-Encoded eXperts; op name kept for now). EXPERIMENTAL,\na BlackHole-Harness original.\n\nNVFP4-style layout: weights in 16-weight blocks with an FP8 scale per block, and on top\neach expert carries a header (an FP32 scale plus a learned value table of 8 or 16 levels)\nthat the low-bit indices point into. The table is fitted per expert (k-means on the\nblock-normalised weights, weighted by the imatrix when data is given). With a type map\nfrom quant.reaq (target=\"codebook\") each expert gets its own table size.\n\nRounding is GPTQ onto the codebook by default: columns are quantised to the nearest table\nlevel in order, and each column's error is pushed onto the not-yet-quantised columns\nthrough the calibration Hessian, exactly as quant.gptq does onto llama.cpp grids.\n\nMeasured (B200, 2026-10-23, Qwen3-30B-A3B at REAP 25%, simulated quant, 32 held-out\nanswers). The pieces stack:\n    GPTQ int3, uniform                        3.25 bpw           KL 0.083\n    8-level tables, nearest rounding          3.25 bpw (8.23 GB) KL 0.066\n    8-level tables, GPTQ rounding             3.25 bpw           KL 0.054\n    uniform 8-level / random split / REAQ     3.5 bpw            KL 0.049 / 0.047 / 0.041\n    REAQ 16/8 levels, GPTQ rounding           9.5 GB             KL 0.033 (GPTQ int4 0.034 at 10.4 GB)\nA per-expert scale alone does nothing; at 4 bits a per-expert 16-level table with nearest\nrounding only ties NVFP4. Lab until it generalises (next: gpt-oss-20b) and a real kernel\nexists; then \"REAP 25% + REAQ codebooks\" replaces plan.fit's MoE int3 tiers.\n\nServing: no packed format yet. It needs a custom kernel, or a llama.cpp/vLLM patch that\nreads the per-expert header and does the table lookup in the expert matmul. Until then the\noutput is fake-quantised bf16 safetensors plus the headers and indices for measuring.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": "calibration text for the GPTQ Hessians and imatrix weighting; the data so far by default"
+    },
+    "type_map": {
+     "type": "str",
+     "default": "",
+     "help": "per-expert table sizes from quant.reaq (target=codebook), e.g. ${reaq.type_map}; empty uses `levels` for all"
+    },
+    "levels": {
+     "type": "int",
+     "default": 8,
+     "help": "table size when there is no type map: 8 (3-bit indices) | 16 (4-bit)"
+    },
+    "block": {
+     "type": "int",
+     "default": 16,
+     "help": "weights per block, each with its own scale"
+    },
+    "block_scale": {
+     "type": "str",
+     "default": "fp8",
+     "help": "fp8 (e4m3, as NVFP4) | fp16"
+    },
+    "header": {
+     "type": "str",
+     "default": "fp32",
+     "help": "per-expert header precision: scale and table"
+    },
+    "fit": {
+     "type": "str",
+     "default": "kmeans",
+     "help": "kmeans | lloyd_max | nf (fixed NormalFloat table, the ablation)"
+    },
+    "rounding": {
+     "type": "str",
+     "default": "gptq",
+     "help": "gptq: error-compensated onto the table, needs data | nearest (the ablation)"
+    },
+    "damp": {
+     "type": "float",
+     "default": 0.01,
+     "help": "gptq: Hessian dampening"
+    },
+    "iters": {
+     "type": "int",
+     "default": 20,
+     "help": ""
+    },
+    "experts_only": {
+     "type": "bool",
+     "default": true,
+     "help": "attention, routers, shared experts and the head keep their types"
+    },
+    "export": {
+     "type": "str",
+     "default": "fake_quant",
+     "help": "fake_quant (bf16 safetensors + headers) | packed (needs the kernel; not implemented)"
+    }
+   }
+  },
+  {
+   "name": "quant.fp8_experts",
+   "major": 1,
+   "doc": "Routed experts to fp8 with 128x128 block scales; attention, routers, shared experts\nand the head stay bf16. For vLLM serving on a GPU box.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    }
+   }
+  },
+  {
+   "name": "quant.gguf",
+   "major": 1,
+   "doc": "Write the GGUF with llama-quantize from a type map (or a single type), then the\nparity checks: every tensor as mapped, size within 0.5% of plan, KLD and top-1 vs\na bf16 GGUF of the same weights, llama-tokenize == HF.\n\nNever plain round-to-nearest: either the weights come from quant.gptq already snapped\nto this GGUF grid (packed exactly, no imatrix), or llama-quantize gets an imatrix.\nOn Qwen3-8B (B200, 2026-10-23) GPTQ int4 had 2.5x less KL than round-to-nearest.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "type_map": {
+     "type": "str",
+     "default": "",
+     "help": "from quant.gguf_map; empty uses `type`"
+    },
+    "imatrix": {
+     "type": "str",
+     "default": "",
+     "help": "required unless the model came from quant.gptq on this type's grid"
+    },
+    "type": {
+     "type": "str",
+     "default": "Q4_K_M",
+     "help": ""
+    },
+    "pre_snapped": {
+     "type": "bool",
+     "default": false,
+     "help": "the weights are already on the grid (after quant.gptq): pack them exactly"
+    }
+   }
+  },
+  {
+   "name": "quant.gguf_map",
+   "major": 1,
+   "doc": "Plan a per-tensor GGUF type map under a size budget: expert bit widths from REAP\nlayer importance x imatrix output energy, fixed types for attention, embeddings, head.\nWrites the map and its predicted file size; does not quantise.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": "imatrix text, chat-formatted"
+    },
+    "saliency": {
+     "type": "str",
+     "default": "",
+     "help": "optional REAP scores, e.g. ${score.saliency}"
+    },
+    "max_gb": {
+     "type": "float",
+     "default": 0.0,
+     "help": "file budget; 0 = footprint.max_gb minus KV and buffers"
+    },
+    "floor": {
+     "type": "str",
+     "default": "q2_k",
+     "help": ""
+    },
+    "ceiling": {
+     "type": "str",
+     "default": "q6_k",
+     "help": ""
+    },
+    "head": {
+     "type": "str",
+     "default": "q8_0",
+     "help": "output layer type (BH keeps an 8-bit head)"
+    }
+   }
+  },
+  {
+   "name": "quant.gptq",
+   "major": 1,
+   "doc": "GPTQ: quantise each layer's weights column by column, pushing every rounding error\nonto the columns not yet quantised using the layer's input Hessian from calibration\ntext, so the layer's output changes as little as possible. Writes a model whose weights\nalready sit on the target grid:\n  gguf:<type>   llama.cpp's block grids (Q4_K, Q3_K, Q5_K, Q6_K; scales per super-block),\n                so quant.gguf with pre_snapped packs them bit-exactly (llmap kquant.py\n                has the grid code)\n  int<b>-g<n>   plain group-wise integers for vLLM (GPTQ/Marlin kernels, compressed-tensors)\n\nQwen3-8B, B200, 2026-10-23: int4 6.1 GB KL 0.028 (round-to-nearest 0.070), int3 5.3 GB\nKL 0.15, better than any pruned recipe of similar size.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": "calibration text; the data so far"
+    },
+    "grid": {
+     "type": "str",
+     "default": "gguf:Q4_K_M",
+     "help": "gguf:<type> | int4-g128 | int3-g128 | typemap:<path> (per-tensor grids, e.g. from quant.reaq)"
+    },
+    "samples": {
+     "type": "int",
+     "default": 128,
+     "help": "calibration sequences for the Hessians"
+    },
+    "damp": {
+     "type": "float",
+     "default": 0.01,
+     "help": "Hessian dampening, as a share of its mean diagonal"
+    },
+    "act_order": {
+     "type": "bool",
+     "default": true,
+     "help": "quantise columns in order of decreasing Hessian diagonal"
+    },
+    "keep": {
+     "type": "list",
+     "default": [
+      "lm_head",
+      "embed_tokens"
+     ],
+     "help": "tensors left at 8/16 bits"
+    }
+   }
+  },
+  {
+   "name": "quant.mlx",
+   "major": 1,
+   "doc": "MLX folders for Apple silicon: Q<bits> group quantisation, or DWQ<bits> that trains\nthe scales so next-token distributions match the full model on the data so far.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "quant": {
+     "type": "str",
+     "default": "DWQ4",
+     "help": "Q4 | Q8 | DWQ4 | ..."
+    },
+    "group_size": {
+     "type": "int",
+     "default": 64,
+     "help": ""
+    }
+   }
+  },
+  {
+   "name": "quant.reaq",
+   "major": 1,
+   "doc": "REAQ, Router-weighted Expert Activation Quantization: a BlackHole-Harness original\n(2026-10-23). EXPERIMENTAL until the GPU thread's interval test reports.\n\nREAP's router-weighted activation score (saliency x routing frequency per expert) sets\neach expert's bit width inside an interval [min_bits, max_bits]: experts the purpose\nleans on get more bits, rarely used ones fewer, under a byte budget (a knapsack over\nexpert x type, cost = bytes, value = score-weighted error of the type). No expert is\nremoved. Attention, router, shared experts and the head keep fixed types.\n\nEarlier history: a first version (2026-10-23, then called expert_bits, allowing 2-bit and\npruning the coldest experts) lost to uniform int4/int3 at equal size by 0.01-0.04 KL,\nmost likely because rare experts went to 2 bits; hence the interval, which keeps every\nexpert at min_bits or above. Uniform GPTQ per-layer quant is the baseline to beat.\n\nMoE only, floor 3 bits (B200, 2026-10-23): on a dense model MoEfied to experts, REAQ\nlost to uniform GPTQ at both budgets (int4 0.028 vs best mix 0.031; int3 0.108 vs 0.24),\nand every interval reaching down to 2-bit was bad. Params reject a Q2 floor.\n\nRuntimes store a layer's experts as one fused tensor of one type, so the plan is\nrealised by `layout`:\n  safetensors  per-expert quantisation configs for a custom torch/vLLM loader\n               (what the GPU thread's interval test measures)\n  bands        sort experts by score and split each layer's fused tensors into 2-4\n               bands (hot/warm/cold), one type per band; needs the harness's\n               llama.cpp patch that loads banded expert tensors\n  layer        one type per layer (stock llama.cpp and Ollama); this averages REAQ's\n               per-expert choice away, so it is only a fallback\nWrites the type map quant.gptq / quant.gguf consume, the expert permutation, and the\npredicted size and error.\n\ntarget=\"codebook\" picks a value-table size per expert for quant.expert_codebook instead\nof a GGUF type (B200, 2026-10-23, Qwen3-30B-A3B at REAP 25%: top 50% experts by REAP\nscore on 16-level tables, the rest on 8-level, KL 0.036 at 4.0 bpw vs 0.043 for a random\nsplit: the first per-expert allocation that beat uniform).",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "saliency": {
+     "type": "str",
+     "default": "",
+     "help": "REAP score table, e.g. ${score.saliency}"
+    },
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": "text for measuring each type's error per expert (imatrix); empty uses the score only"
+    },
+    "max_gb": {
+     "type": "float",
+     "default": 0.0,
+     "help": "expert byte budget; 0 = footprint.max_gb minus the fixed parts and KV"
+    },
+    "min_bits": {
+     "type": "str",
+     "default": "Q3_K",
+     "help": "the interval's floor: no expert goes below it"
+    },
+    "max_bits": {
+     "type": "str",
+     "default": "Q6_K",
+     "help": "the interval's ceiling"
+    },
+    "score": {
+     "type": "str",
+     "default": "saliency*freq",
+     "help": "value per expert: saliency | freq | saliency*freq | a lab op's column"
+    },
+    "layout": {
+     "type": "str",
+     "default": "safetensors",
+     "help": "safetensors | bands (needs the llama.cpp patch) | layer (fallback)"
+    },
+    "target": {
+     "type": "str",
+     "default": "bits",
+     "help": "bits: a GGUF type per expert in [min_bits, max_bits] | codebook: a table size per expert for quant.expert_codebook"
+    },
+    "levels": {
+     "type": "list",
+     "default": [
+      8,
+      16
+     ],
+     "help": "codebook target: the table sizes to choose between, smallest first"
+    },
+    "hot_share": {
+     "type": "float",
+     "default": 0.5,
+     "help": "codebook target: share of experts (by score) that get the largest table; 0 = solve under max_gb"
+    },
+    "bands": {
+     "type": "int",
+     "default": 3,
+     "help": ""
+    }
+   }
+  },
+  {
+   "name": "quant.w4a16",
+   "major": 1,
+   "doc": "4-bit weights, 16-bit activations for vLLM on Ada/Hopper: quant.gptq with an int4\ngrid, written as compressed-tensors with an fp8 head.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "head_fp8": {
+     "type": "bool",
+     "default": true,
+     "help": ""
+    }
+   }
+  },
+  {
+   "name": "rft.self",
+   "major": 1,
+   "doc": "Rejection-sampling fine-tune on the model's own passing answers, in rounds. A round\nis kept only if held-out KL drops and paired pass@1 does not fall (BH round rule).",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": "student; defaults to the last model in the chain"
+    },
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": "training rows"
+    },
+    "epochs": {
+     "type": "float",
+     "default": 1.0,
+     "help": ""
+    },
+    "lr": {
+     "type": "float",
+     "default": 0.0001,
+     "help": ""
+    },
+    "lora_r": {
+     "type": "int",
+     "default": 16,
+     "help": "0 = full fine-tune"
+    },
+    "targets": {
+     "type": "list",
+     "default": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj"
+     ],
+     "help": ""
+    },
+    "train_experts": {
+     "type": "bool",
+     "default": true,
+     "help": ""
+    },
+    "max_len": {
+     "type": "int",
+     "default": 2048,
+     "help": ""
+    },
+    "max_minutes": {
+     "type": "float",
+     "default": 60.0,
+     "help": "wall-clock cap; training stops, merges and saves"
+    },
+    "prompts": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "rounds": {
+     "type": "int",
+     "default": 4,
+     "help": ""
+    },
+    "stop_after_unkept": {
+     "type": "int",
+     "default": 2,
+     "help": ""
+    },
+    "checker": {
+     "type": "str",
+     "default": "tests",
+     "help": ""
+    }
+   }
+  },
+  {
+   "name": "score.neurons",
+   "major": 1,
+   "doc": "Activation-scored importance of every FFN neuron (intermediate channel) of a dense\nmodel on the calibration text: mean |activation| x norm of its down-projection column\n(Wanda-style), plus the critical set: neurons whose activations are massive outliers\n(> `massive` x the layer median) and those carrying super weights. Same JSON layout as\nREAP's table, per layer and per neuron, so prune and quant ops read either.\n\nB200 on Qwen3-8B (2026-10-23): 25% pruned by this score gave KL 0.24 (expert-norm 0.26,\nMoEfy+REAP 0.67); random 50% destroyed the model, so the critical set matters.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "max_seq": {
+     "type": "int",
+     "default": 2048,
+     "help": ""
+    },
+    "metric": {
+     "type": "str",
+     "default": "act_x_down",
+     "help": "act_x_down | act | down_norm"
+    },
+    "massive": {
+     "type": "float",
+     "default": 100.0,
+     "help": "activation outlier factor that marks a neuron critical"
+    }
+   }
+  },
+  {
+   "name": "score.reap",
+   "major": 1,
+   "doc": "REAP saliency per expert: router-weighted expert activation norms over the\ncalibration tokens, with hooks on every router of any HF MoE (moe.py).\n\nThe saliency artifact is a shared score table other ops read (prune.reap,\nquant.reaq, quant.gguf_map, lab ops): JSON\n{\"layers\": [{\"layer\": 3, \"experts\": [{\"id\": 0, \"saliency\": S_j, \"freq\": share of tokens\nrouted to j, \"gate_mean\": mean g_j(x) when routed, \"out_norm\": mean ||f_j(x)||}, ...]}],\n\"tokens\": n, \"model\": id}. S_j = mean over tokens routed to j of g_j(x)*||f_j(x)||.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": "calibration set, e.g. ${calib.data}"
+    },
+    "max_seq": {
+     "type": "int",
+     "default": 2048,
+     "help": ""
+    },
+    "answers": {
+     "type": "bool",
+     "default": true,
+     "help": "score on prompt + answer, not prompts only"
+    }
+   }
+  },
+  {
+   "name": "sft.lora",
+   "major": 1,
+   "doc": "Plain supervised fine-tune with a merged LoRA.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": "student; defaults to the last model in the chain"
+    },
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": "training rows"
+    },
+    "epochs": {
+     "type": "float",
+     "default": 1.0,
+     "help": ""
+    },
+    "lr": {
+     "type": "float",
+     "default": 0.0001,
+     "help": ""
+    },
+    "lora_r": {
+     "type": "int",
+     "default": 16,
+     "help": "0 = full fine-tune"
+    },
+    "targets": {
+     "type": "list",
+     "default": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj"
+     ],
+     "help": ""
+    },
+    "train_experts": {
+     "type": "bool",
+     "default": true,
+     "help": ""
+    },
+    "max_len": {
+     "type": "int",
+     "default": 2048,
+     "help": ""
+    },
+    "max_minutes": {
+     "type": "float",
+     "default": 60.0,
+     "help": "wall-clock cap; training stops, merges and saves"
+    }
+   }
+  },
+  {
+   "name": "sync.bucket",
+   "major": 1,
+   "doc": "Upload the job's outputs, receipt and logs to an S3-compatible bucket (or `hf\nupload`), each artifact under its cache key, so a fresh VM restores whatever matches\ninstead of recomputing it. Use with `always: true`; `shutdown` powers the VM off after.",
+   "params": {
+    "target": {
+     "type": "str",
+     "default": "",
+     "help": "s3://bucket/prefix | hf:<user>/<repo>; empty = $BLACKHOLE_BUCKET"
+    },
+    "include": {
+     "type": "list",
+     "default": [
+      "out",
+      "receipt.json",
+      "events.log"
+     ],
+     "help": ""
+    },
+    "shutdown": {
+     "type": "bool",
+     "default": false,
+     "help": ""
+    }
+   }
+  },
+  {
+   "name": "vocab.trim",
+   "major": 1,
+   "doc": "Keep the tokens seen in the data (plus specials and byte fallbacks), remap the\ntokenizer, slice embedding and head. Checks llama-tokenize == HF after.",
+   "params": {
+    "model": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "data": {
+     "type": "str",
+     "default": "",
+     "help": ""
+    },
+    "keep": {
+     "type": "int",
+     "default": 96000,
+     "help": "target vocabulary size"
+    }
+   }
+  }
+ ],
+ "query": {
+  "top": [
+   "layers",
+   "embed",
+   "head",
+   "norm",
+   "mtp",
+   "experts"
+  ],
+  "children": {
+   "layers": [
+    "attn",
+    "mixer",
+    "mlp",
+    "moe",
+    "norms"
+   ],
+   "moe": [
+    "router",
+    "experts",
+    "shared"
+   ],
+   "attn": [
+    "heads"
+   ]
+  },
+  "filters": {
+   "index": "position in its list",
+   "id": "the part's id",
+   "layer": "layer index",
+   "kind": "attention, mixer, moe, mlp, ...",
+   "score": "REAP saliency",
+   "freq": "routing frequency",
+   "rank": "rank by score, 0..1 (0 = lowest)",
+   "params": "parameter count"
+  },
+  "kinds": [
+   "attention",
+   "mixer",
+   "moe",
+   "mlp"
+  ],
+  "examples": {
+   "layers[0:4].attn": "attention of the first four layers",
+   "layers[-1]": "the last layer",
+   "layers[kind==mixer]": "every linear-attention / Mamba layer",
+   "layers[*].moe.experts[rank<0.25]": "the bottom quarter of every layer's experts by REAP score",
+   "experts[score<0.01 & layer>=10]": "low-score experts from layer 10 on",
+   "layers[3].attn.heads[0,5,7]": "three heads of layer 3",
+   "moe.router": "every router",
+   "moe.shared": "every shared expert"
+  }
+ },
+ "architectures": [
+  "moe",
+  "dense",
+  "hybrid"
+ ],
+ "devices": [
+  {
+   "id": "mac16",
+   "label": "Mac, 16 GB unified memory",
+   "memGb": 16
+  },
+  {
+   "id": "mac32",
+   "label": "Mac, 32 GB unified memory",
+   "memGb": 32
+  },
+  {
+   "id": "gpu8",
+   "label": "GPU, 8 GB VRAM",
+   "memGb": 8
+  },
+  {
+   "id": "gpu12",
+   "label": "GPU, 12 GB VRAM",
+   "memGb": 12
+  },
+  {
+   "id": "gpu16",
+   "label": "GPU, 16 GB VRAM",
+   "memGb": 16
+  },
+  {
+   "id": "gpu24",
+   "label": "GPU, 24 GB VRAM",
+   "memGb": 24
+  },
+  {
+   "id": "cpu32",
+   "label": "CPU, 32 GB RAM",
+   "memGb": 32
+  },
+  {
+   "id": "b300",
+   "label": "NVIDIA B300, 288 GB",
+   "memGb": 288
+  }
+ ],
+ "models": [
+  {
+   "id": "Qwen/Qwen3-30B-A3B-Instruct-2507",
+   "detail": "moe \u00b7 30.5B total, 3.3B active"
+  },
+  {
+   "id": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+   "detail": "moe \u00b7 30.5B total, 3.3B active"
+  },
+  {
+   "id": "Qwen/Qwen3-Next-80B-A3B-Instruct",
+   "detail": "hybrid \u00b7 80B total, 3B active"
+  },
+  {
+   "id": "openai/gpt-oss-20b",
+   "detail": "moe \u00b7 21B total, 3.6B active"
+  },
+  {
+   "id": "openai/gpt-oss-120b",
+   "detail": "moe \u00b7 117B total, 5.1B active"
+  },
+  {
+   "id": "zai-org/GLM-4.5-Air",
+   "detail": "moe \u00b7 106B total, 12B active"
+  },
+  {
+   "id": "zai-org/GLM-4.6",
+   "detail": "moe \u00b7 355B total, 32B active"
+  },
+  {
+   "id": "MiniMaxAI/MiniMax-M2",
+   "detail": "moe \u00b7 230B total, 10B active"
+  },
+  {
+   "id": "deepseek-ai/DeepSeek-V3.1",
+   "detail": "moe \u00b7 671B total, 37B active"
+  },
+  {
+   "id": "moonshotai/Kimi-K2-Instruct",
+   "detail": "moe \u00b7 1000B total, 32B active"
+  },
+  {
+   "id": "RecursiveSI/flint",
+   "detail": "moe \u00b7 39.8B total, 3.5B active"
+  },
+  {
+   "id": "ibm-granite/granite-4.0-h-tiny",
+   "detail": "hybrid \u00b7 7B total, 1B active"
+  },
+  {
+   "id": "Qwen/Qwen3.6-35B-A3B",
+   "detail": "hybrid \u00b7 35B total, 3B active"
+  },
+  {
+   "id": "Qwen/Qwen3.8-27B",
+   "detail": "hybrid \u00b7 26.9B total, 26.9B active"
+  }
+ ],
+ "jedi": false
+}
