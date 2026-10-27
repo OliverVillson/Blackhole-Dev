@@ -263,6 +263,7 @@ recipe bundle or your functions folder replaces the built-in stage.
 | `reap-gpu` | REAP scores, prune `ratio`, KL / top-1 vs the teacher | score prune eval |
 | `traces` | verified shortest-trace data: teacher solves problems `samples` times, tests run, shortest pass kept (ported in full) | (heal's data) |
 | `distil` | distillation heal from the teacher, or from your own `data` rows; on-policy rounds, layer / router matching | heal |
+| `kd` | the distillation loop itself written out in one file (data, forward-KL loss, frozen parts, held-out early stop, save): fork it to change the loss or what trains | (none: runs in the function) |
 | `gptq` | GPTQ int4 W4A16 on the routed experts | gptq |
 | `reaq-codebook` | REAQ per-expert 16 / 8-level tables, measured | reaq |
 | `mlx-export` | MLX folder: GPTQ or HEX experts, REAQ tiers, attention / head bits | mlx |

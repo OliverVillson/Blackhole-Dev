@@ -180,6 +180,26 @@ await win.waitForFunction(() => [...document.querySelectorAll(".tree .fgroup")].
 await win.screenshot({ path: join(out, "10-recipe-folders.png") });
 await win.click(".it.folder:has-text('mac')");
 assert(!(await win.isVisible(".rc:has-text('int4.py')")), "clicking a folder collapses it");
+// Start from a preset: a picker of the shipped preset recipe files (and catalog presets).
+await win.evaluate(() => window.__shell.executeCommand("recipe.fromPreset"));
+await win.waitForSelector(".preset:has-text('REAP/Q-HEX from scratch')");
+assert(await win.isVisible(".preset-group:has-text('Pipeline presets')"), "catalog presets without a file are listed too");
+await win.fill(".modal input", "scratch");
+assert((await win.locator(".preset").count()) === 1, "the filter narrows the list");
+await win.screenshot({ path: join(out, "11-presets.png") });
+await win.keyboard.press("Enter");
+await win.waitForFunction(() => window.__shell.activeFile()?.endsWith("reapq_hex_scratch.py"));
+// A recipe dragged from the side bar onto an editor edge opens in a new split.
+await win.evaluate(() => window.__shell.executeCommand("group.joinAll"));
+await win.dragAndDrop(".rc:has-text('first-recipe.py')", ".editor-area .group .editor-host", { targetPosition: { x: 600, y: 200 } });
+await win.waitForFunction(() => document.querySelectorAll(".editor-area .group").length === 2, null, { timeout: 5000 });
+assert(await win.evaluate(() => window.__shell.activeFile()?.endsWith("first-recipe.py")), "the dropped recipe opens in the new group");
+await win.evaluate(() => window.__shell.executeCommand("group.joinAll"));
+// Shift+Tab outside the editor moves focus backwards instead of switching tabs.
+const tBefore = await tabIdx();
+await win.focus(".sidebar button >> nth=1");
+await win.keyboard.press("Shift+Tab");
+assert((await tabIdx()) === tBefore, "Shift+Tab in the side bar leaves the editor tabs alone");
 await app.close();
 if (errors.length) {
   console.error("renderer errors:\n" + errors.join("\n"));

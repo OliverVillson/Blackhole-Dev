@@ -53,6 +53,7 @@ def test_a_recipe_of_job_functions_runs_the_pipeline(tmp_path):
          "gates": [{"metric": "kl", "op": ">=", "value": 0.0}]},
         {"id": "distil", "kind": "job.fn", "fn": "distil", "prompts": 6, "max_tokens": 10, "accum": 2, "lr": 1e-3,
          "expert_rank": 2, "layer_weight": 1.0},
+        {"id": "kd", "kind": "job.fn", "fn": "kd", "accum": 2, "eval_every": 1, "heldout": 2, "minutes": 2, "lr": 1e-2},
         {"id": "mlx-export", "kind": "job.fn", "fn": "mlx-export", "group": 32, "hot": 0.5},
         {"id": "qheal-fn", "kind": "job.fn", "fn": "qheal", "minutes": 5},
         {"id": "bench-fn", "kind": "job.fn", "fn": "bench", "models": "mlx", "file": str(probs), "max_tokens": 16,
@@ -80,6 +81,8 @@ def test_a_recipe_of_job_functions_runs_the_pipeline(tmp_path):
     assert json.loads((work / "reap.json").read_text())["experts_kept"] == 4           # ${inputs.prune} = 0.5 of 8
     heal = json.loads((work / "heal.json").read_text())
     assert heal["steps"] >= 1 and heal["sequences"] == 6
+    kd = json.loads((work / "kd.json").read_text())                                    # the written-out loop
+    assert kd["sequences"] == 4 and kd["heldout"] == 2 and kd["steps"] >= 1 and kd["history"] and kd["kl_before"] >= 0
     assert json.loads((job / "config.json").read_text())["heal_prompts"] == 6           # knobs land in the job config
     assert json.loads((work / "qheal.json").read_text())["steps"] >= 1
     assert json.loads((work / "bench.json").read_text())["problems"] == 1
