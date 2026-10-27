@@ -3,7 +3,7 @@
 
 import * as monaco from "monaco-editor";
 import EditorWorker from "monaco-editor/editor/editor.worker?worker";
-import { DENSITY, type Theme } from "../../shared/themes";
+import type { Theme } from "../../shared/themes";
 import { currentTheme, fontsReady, onTheme } from "../theme";
 import type { Problem } from "../../shared/rpc";
 import { bh } from "../bridge";
@@ -21,7 +21,7 @@ function defineTheme(t: Theme): void {
 }
 
 function fontOptions(t: Theme): monaco.editor.IEditorOptions {
-  const d = DENSITY[t.density];
+  const d = t.metrics;
   return { fontFamily: `"${t.fonts.mono}", Menlo, monospace`, fontSize: d.code, lineHeight: d.lh };
 }
 
@@ -49,6 +49,8 @@ export interface EditorView {
   buffer: Buffer | null;
   states: Map<string, monaco.editor.ICodeEditorViewState | null>;
   ghostZone: string | null;
+  /** Dimmed-line decorations for focus themes. */
+  focus: monaco.editor.IEditorDecorationsCollection;
 }
 
 const EDITOR_OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = {
@@ -106,8 +108,20 @@ export class EditorManager {
     defineTheme(t);
     monaco.editor.setTheme("blackhole");
     const opts = fontOptions(t);
-    this.views.forEach((v) => v.editor.updateOptions(opts));
+    this.views.forEach((v) => {
+      v.editor.updateOptions(opts);
+      this.refocus(v);
+    });
     void fontsReady(t).then(() => monaco.editor.remeasureFonts());
+  }
+
+  /** Focus themes dim every line more than three away from the cursor ("bh-dim", styled by the theme). */
+  private refocus(v: EditorView): void {
+    const m = v.editor.getModel(), at = v.editor.getPosition();
+    if (!currentTheme().focus || !m || !at) return v.focus.clear();
+    const last = m.getLineCount(), lo = at.lineNumber - 3, hi = at.lineNumber + 3;
+    const dim = (a: number, b: number) => ({ range: new monaco.Range(a, 1, b, m.getLineMaxColumn(b)), options: { inlineClassName: "bh-dim" } });
+    v.focus.set([...(lo > 1 ? [dim(1, lo - 1)] : []), ...(hi < last ? [dim(hi + 1, last)] : [])]);
   }
 
   /** The focused group's editor (the one commands and the anatomy "Insert path" act on). */
@@ -117,11 +131,16 @@ export class EditorManager {
 
   createView(host: HTMLElement): EditorView {
     const editor = monaco.editor.create(host, { ...EDITOR_OPTIONS, ...fontOptions(currentTheme()) });
-    const v: EditorView = { id: nextViewId++, editor, buffer: null, states: new Map(), ghostZone: null };
+    const v: EditorView = { id: nextViewId++, editor, buffer: null, states: new Map(), ghostZone: null, focus: editor.createDecorationsCollection() };
     this.views.push(v);
     if (!this.activeView) this.activeView = v;
     editor.onDidFocusEditorWidget(() => this.setActiveView(v));
-    editor.onDidChangeCursorPosition(() => this.listeners.cursor.forEach((cb) => cb(v)));
+    editor.onDidChangeCursorPosition(() => {
+      this.refocus(v);
+      this.listeners.cursor.forEach((cb) => cb(v));
+    });
+    editor.onDidChangeModelContent(() => this.refocus(v));
+    editor.onDidChangeModel(() => this.refocus(v));
     bindTabAutofill(editor, this.completion);
     return v;
   }

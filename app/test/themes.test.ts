@@ -36,8 +36,10 @@ describe("themes", () => {
   it.each(THEMES.map((t) => [t.id, t] as const))("%s keeps text, buttons and code readable", (_, t) => {
     const v = t.vars;
     // Body text: our own themes clear 7:1 (Nightside is dim on purpose, about 8:1). The classic
-    // schemes keep their published colours, which only promise WCAG AA (Solarized Light is 5:1).
-    const body = t.group === "classic" ? 4.5 : 7;
+    // schemes keep their published colours, which only promise WCAG AA (Solarized Light is 5:1),
+    // and so do two experimental ones: Four Shades has only the four LCD greens (6:1) and
+    // red-only Observatory cannot pass 5.3:1 on black.
+    const body = t.group === "classic" || t.id === "four-shades" || t.id === "observatory" ? 4.5 : 7;
     expect(contrast(v.text, v.void)).toBeGreaterThanOrEqual(body);
     expect(contrast(v.text, v.bg2)).toBeGreaterThanOrEqual(body - 1);
     expect(contrast(v.dim, v.bg2)).toBeGreaterThanOrEqual(3);
