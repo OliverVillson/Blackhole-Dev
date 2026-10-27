@@ -5,7 +5,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { h, clear } from "../dom";
 import { bh } from "../bridge";
-import { THEME } from "../../shared/theme";
+import { currentTheme, onTheme } from "../theme";
 import type { Shell } from "../shell";
 
 interface T { id: string; title: string; term: Terminal; fit: FitAddon; el: HTMLElement; exited: boolean }
@@ -22,11 +22,18 @@ export class TerminalPanel {
       const t = this.terms.find((x) => x.id === p.id);
       if (t) {
         t.exited = true;
-        t.term.write(`\r\n\x1b[38;2;162;115;91m[process exited${p.code === null ? "" : ` with ${p.code}`}]\x1b[0m\r\n`);
+        t.term.write(`\r\n\x1b[2m[process exited${p.code === null ? "" : ` with ${p.code}`}]\x1b[0m\r\n`);
         this.drawTabs();
       }
     });
     new ResizeObserver(() => this.fitActive()).observe(this.host);
+    onTheme((t) => {
+      for (const x of this.terms) {
+        x.term.options.theme = t.terminal;
+        x.term.options.fontFamily = `"${t.fonts.mono}", Menlo, monospace`;
+      }
+      this.fitActive();
+    });
   }
 
   render(el: HTMLElement): void {
@@ -38,10 +45,10 @@ export class TerminalPanel {
   attach(id: string, title: string): void {
     if (this.terms.some((t) => t.id === id)) return this.focus(id);
     const term = new Terminal({
-      fontFamily: "JetBrains Mono, Menlo, monospace",
+      fontFamily: `"${currentTheme().fonts.mono}", Menlo, monospace`,
       fontSize: 12,
       cursorBlink: true,
-      theme: { background: THEME.bg1, foreground: THEME.text, cursor: THEME.ember, selectionBackground: "#4a0d0288", red: THEME.redshift, yellow: THEME.flare, brightRed: "#ff5a3c", brightYellow: "#ffc773" },
+      theme: currentTheme().terminal,
     });
     const fit = new FitAddon();
     term.loadAddon(fit);

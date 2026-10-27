@@ -3,12 +3,14 @@ import "./fonts";
 // request and sends one answer. Approve only counts for a trusted (human) event after the arm delay.
 import "./styles.css";
 import { h } from "./dom";
+import { applyTheme, cachedThemeId } from "./theme";
 import type { ConfirmShown } from "../shared/gate";
 
 interface GateBridge {
   onRequest(cb: (req: ConfirmShown) => void): void;
   answer(a: { id: string; approved: boolean; trusted: boolean }): void;
 }
+applyTheme(cachedThemeId()); // the main window caches the chosen theme for us
 const gate = (window as unknown as { gate: GateBridge }).gate;
 
 const LABEL: Record<string, string> = {

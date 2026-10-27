@@ -10,15 +10,20 @@ import { recipesView, newRecipe, newFunction, newFolder } from "./views/recipes"
 import { functionsView, showFunction, forkFunction } from "./views/functions";
 import { Anatomy } from "./views/anatomy";
 import { settingsView } from "./views/settings";
+import { registerThemeCommands } from "./views/themes";
 import { PlanPanel, problemsPanel } from "./panels/plan";
 import { TerminalPanel, outputPanel } from "./panels/terminal";
 import { welcomeTab, overviewTab } from "./tabs";
 import { openPalette, openSearch } from "./palette";
 import { rendererModules } from "../modules.renderer";
+import { applyTheme, cachedThemeId, currentTheme } from "./theme";
 import type { AppPaths } from "../shared/ext";
 import type { HelperStatus } from "../shared/rpc";
 
 async function boot(): Promise<void> {
+  applyTheme(cachedThemeId());
+  const saved = await bh.invoke<string | null>("settings:get", "ui.theme", null).catch(() => null);
+  if (saved && saved !== currentTheme().id) applyTheme(saved);
   const shell = new Shell(document.getElementById("app")!);
   shell.paths = await bh.invoke<AppPaths>("ws:paths");
   shell.initStatus();
@@ -52,6 +57,7 @@ async function boot(): Promise<void> {
   // Commands (ids are what menus, keybindings and modules call).
   const cmd = (id: string, title: string, run: (...a: any[]) => unknown, keybinding?: string) => shell.registerCommand({ id, title, run, keybinding });
   cmd("palette.open", "Quick open", () => openPalette(shell));
+  registerThemeCommands(cmd);
   cmd("palette.commands", "Show all commands", () => openPalette(shell, ">"));
   cmd("search.workspace", "Find in files", () => openSearch(shell));
   cmd("recipe.new", "New recipe", (dir?: unknown) => newRecipe(shell, typeof dir === "string" ? dir : undefined).catch(report));

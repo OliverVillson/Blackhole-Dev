@@ -200,6 +200,25 @@ const tBefore = await tabIdx();
 await win.focus(".sidebar button >> nth=1");
 await win.keyboard.press("Shift+Tab");
 assert((await tabIdx()) === tBefore, "Shift+Tab in the side bar leaves the editor tabs alone");
+// Themes: pick one in Settings, it repaints everything (editor included) and survives a reload.
+const bg = (sel) => win.evaluate((s) => getComputedStyle(document.querySelector(s)).backgroundColor, sel);
+assert((await bg("body")) === "rgb(0, 0, 0)", "Singularity is the default theme");
+await win.evaluate(() => window.__shell.showActivity("settings"));
+await win.waitForSelector(".thm[data-theme-id='lab-paper']");
+assert((await win.locator(".thm").count()) >= 10, "Settings lists the themes");
+await win.click(".thm[data-theme-id='lab-paper']");
+await win.waitForFunction(() => getComputedStyle(document.body).backgroundColor === "rgb(255, 255, 255)");
+await win.evaluate(() => window.__shell.showActivity("recipes"));
+await win.click(".rc:has-text('first-recipe.py')");
+await win.waitForFunction(() => getComputedStyle(document.querySelector(".monaco-editor .monaco-editor-background")).backgroundColor === "rgb(255, 255, 255)");
+assert((await bg(".status")) === "rgb(243, 244, 247)", "the status bar follows the theme");
+await win.evaluate(() => window.__shell.showActivity("settings"));
+await win.screenshot({ path: join(out, "12-theme-lab-paper.png") });
+await win.reload();
+await win.waitForFunction(() => window.__shell);
+assert((await bg("body")) === "rgb(255, 255, 255)", "the chosen theme is remembered");
+await win.evaluate(() => window.__shell.executeCommand("theme.singularity"));
+assert((await bg("body")) === "rgb(0, 0, 0)", "Theme: Singularity from the palette switches back");
 await app.close();
 if (errors.length) {
   console.error("renderer errors:\n" + errors.join("\n"));

@@ -3,7 +3,8 @@
 
 import * as monaco from "monaco-editor";
 import EditorWorker from "monaco-editor/editor/editor.worker?worker";
-import { THEME } from "../../shared/theme";
+import { DENSITY, type Theme } from "../../shared/themes";
+import { currentTheme, fontsReady, onTheme } from "../theme";
 import type { Problem } from "../../shared/rpc";
 import { bh } from "../bridge";
 import { StreamManager } from "./stream";
@@ -13,38 +14,18 @@ import { CompletionSource, bindTabAutofill, installCompletion } from "./autofill
   getWorker: () => new EditorWorker(),
 };
 
-const hex = (c: string) => c.replace("#", "");
-monaco.editor.defineTheme("blackhole", {
-  base: "vs-dark",
-  inherit: true,
-  rules: [
-    { token: "", foreground: hex(THEME.text) },
-    { token: "keyword", foreground: hex(THEME.ember) },
-    { token: "string", foreground: hex(THEME.flare) },
-    { token: "comment", foreground: hex(THEME.dim), fontStyle: "italic" },
-    { token: "number", foreground: "ff8c5a" },
-    { token: "tag", foreground: "e8a27a" },
-    { token: "delimiter", foreground: "c9a58f" },
-    { token: "type", foreground: hex(THEME.photon) },
-    { token: "identifier", foreground: hex(THEME.text) },
-  ],
-  colors: {
-    "editor.background": THEME.void,
-    "editor.foreground": THEME.text,
-    "editorLineNumber.foreground": "#7a5240",
-    "editorLineNumber.activeForeground": THEME.ember,
-    "editor.lineHighlightBackground": "#140602",
-    "editor.selectionBackground": "#4a0d0288",
-    "editorCursor.foreground": THEME.ember,
-    "editorWidget.background": THEME.bg2,
-    "editorWidget.border": THEME.ash,
-    "editorGutter.background": THEME.void,
-    "scrollbarSlider.background": "#2b0d0588",
-    "editorError.foreground": THEME.redshift,
-    "editorWarning.foreground": THEME.ember,
-    "editorIndentGuide.background1": "#1e0804",
-  },
-});
+// One Monaco theme name ("blackhole") redefined from the active app theme; setTheme repaints
+// every editor. Fonts and density follow the theme too (renderer/theme.ts).
+function defineTheme(t: Theme): void {
+  monaco.editor.defineTheme("blackhole", { base: t.light ? "vs" : "vs-dark", inherit: true, rules: t.monaco.rules, colors: t.monaco.colors });
+}
+
+function fontOptions(t: Theme): monaco.editor.IEditorOptions {
+  const d = DENSITY[t.density];
+  return { fontFamily: `"${t.fonts.mono}", Menlo, monospace`, fontSize: d.code, lineHeight: d.lh };
+}
+
+defineTheme(currentTheme());
 
 export interface Buffer {
   path: string;
@@ -73,9 +54,6 @@ export interface EditorView {
 const EDITOR_OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = {
   theme: "blackhole",
   automaticLayout: true,
-  fontFamily: "JetBrains Mono, Menlo, monospace",
-  fontSize: 13,
-  lineHeight: 21,
   minimap: { enabled: false },
   scrollBeyondLastLine: false,
   renderLineHighlight: "line",
@@ -119,6 +97,17 @@ export class EditorManager {
       renderGhost: (file, at, text) => this.renderGhost(file, at, text),
       changed: (file) => this.listeners.hunks.forEach((cb) => cb(file)),
     });
+    onTheme((t) => this.restyle(t));
+    void fontsReady(currentTheme()).then(() => monaco.editor.remeasureFonts());
+  }
+
+  /** Repaint every editor for a new theme: colours now, glyph metrics once its fonts are in. */
+  restyle(t: Theme): void {
+    defineTheme(t);
+    monaco.editor.setTheme("blackhole");
+    const opts = fontOptions(t);
+    this.views.forEach((v) => v.editor.updateOptions(opts));
+    void fontsReady(t).then(() => monaco.editor.remeasureFonts());
   }
 
   /** The focused group's editor (the one commands and the anatomy "Insert path" act on). */
@@ -127,7 +116,7 @@ export class EditorManager {
   }
 
   createView(host: HTMLElement): EditorView {
-    const editor = monaco.editor.create(host, EDITOR_OPTIONS);
+    const editor = monaco.editor.create(host, { ...EDITOR_OPTIONS, ...fontOptions(currentTheme()) });
     const v: EditorView = { id: nextViewId++, editor, buffer: null, states: new Map(), ghostZone: null };
     this.views.push(v);
     if (!this.activeView) this.activeView = v;
