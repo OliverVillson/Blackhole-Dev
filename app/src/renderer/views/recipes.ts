@@ -213,7 +213,7 @@ export function recipesView(shell: Shell): (el: HTMLElement) => void {
         },
           h("div", { class: "row", style: "gap:8px;flex-wrap:nowrap" }, h("span", { class: "nm" }, r.name), shell.editor.isDirty(r.path) ? h("span", { class: "badge hot" }, "unsaved") : null),
           m ? h("div", { class: "meta" }, [m.base, m.target].filter(Boolean).join(" → ") || "no base model") : null,
-          title ? h("div", { class: "meta", style: "color:var(--text)" }, title) : null);
+          title ? h("div", { class: "meta rc-doc", style: "color:var(--text)" }, title) : null);
       },
       fileMenu: (r) => recipeItems(shell, r.path, refresh),
       newFile: (dir) => shell.executeCommand("recipe.new", dir),
