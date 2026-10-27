@@ -5,6 +5,7 @@ import { bh } from "../bridge";
 import { toast } from "../ui";
 import { prettyKeys } from "../keys";
 import { KEYMAP, EDITOR_KEYS } from "../shortcuts";
+import { themePicker } from "./themes";
 import type { Shell } from "../shell";
 import type { Licence } from "../../shared/ext";
 
@@ -41,6 +42,7 @@ export function settingsView(shell: Shell): (el: HTMLElement) => void {
 
     view.append(
       h("div", { class: "view-head" }, h("span", { class: "hd" }, "Settings")),
+      section("Theme", themePicker()),
       section("Python helper", python,
         h("div", { class: "row" },
           h("button", { class: "btn sm", onclick: async () => { await bh.invoke("settings:set", "python.path", python.value.trim()); toast("Restarting the helper with this Python"); } }, "Save and restart"),
