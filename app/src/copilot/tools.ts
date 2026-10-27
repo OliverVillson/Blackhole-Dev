@@ -161,6 +161,36 @@ export const TOOLS = [
     json: { type: "object", properties: { hostId: str("Host id from list_machines"), name: str("Job name") }, required: ["hostId"] },
   }),
   spec({
+    name: "list_analyses",
+    side: "module",
+    description: "List the analyses (plots and stats over a model: overview, layer-stats, expert-stats, reap-scores, weight-histogram, quant-error, job-results, compare, and the user's own) with what each reads.",
+    schema: z.object({}),
+    json: { type: "object", properties: {} },
+  }),
+  spec({
+    name: "list_models",
+    side: "module",
+    description: "List the models in the user's models folder (downloaded, finished runs copied back, forks) with their lineage.",
+    schema: z.object({}),
+    json: { type: "object", properties: {} },
+  }),
+  spec({
+    name: "run_analysis",
+    side: "module",
+    description:
+      "Run a named analysis on a model and get its report (stats, tables, chart data). Analyses that read only headers are free; one that reads more weights than the user's limit opens a confirmation dialog the user decides.",
+    schema: z.object({ name: z.string().min(1), model: z.string().optional(), params: z.record(z.string(), z.unknown()).optional() }),
+    json: {
+      type: "object",
+      properties: {
+        name: str("Analysis name from list_analyses, e.g. expert-stats"),
+        model: str("Model folder or Hub id; omit to use the model open_model opened"),
+        params: { type: "object", description: "The analysis's parameters, e.g. {\"layer\": 3}" },
+      },
+      required: ["name"],
+    },
+  }),
+  spec({
     name: "request_action",
     side: "gated",
     description:
@@ -233,6 +263,9 @@ export const GATED_CHANNELS: Record<string, string> = {
 export const MODULE_CHANNELS: Record<string, string> = {
   list_machines: "vm:hosts.list",
   job_status: "vm:job.state",
+  list_analyses: "analysis:list",
+  list_models: "analysis:models",
+  run_analysis: "analysis:run",
 };
 
 /** Apply find/replace edits to text, refusing any that touch locked lines. Lines are 1-based. */

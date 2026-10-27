@@ -102,6 +102,9 @@ export interface FunctionInfo {
 }
 
 /** Every method the renderer may call through helper:call. Keep in sync with blackhole_dev.rpc. */
+/** A preset recipe file shipped with blackhole_dev (recipes/*.py, recipes/examples/*.py). */
+export interface PresetFile { id: string; file: string; group: string; title: string; description: string; base?: string | null }
+
 export interface HelperMethods {
   "recipe.lint": [{ path: string; text?: string }, { problems: Problem[] }];
   "recipe.plan": [{ path: string; text?: string; device: string; model?: string; inputs?: Record<string, unknown> }, PlanResult];
@@ -110,6 +113,9 @@ export interface HelperMethods {
   "recipe.bundle": [{ path: string; out?: string; inputs?: Record<string, unknown>; model?: string; target?: string }, { bundle: string; sha256: string; functions: unknown[]; manifest: unknown }];
   "recipe.fromToml": [{ path: string; out?: string }, { path: string; text: string }];
   "recipe.fromPreset": [{ id: string; out?: string }, { path: string; text: string }];
+  "recipe.presets": [Record<string, never>, { presets: { id: string; name: string; summary: string; pipeline: boolean; tags: string[] }[] }];
+  "recipe.presetFiles": [Record<string, never>, { presets: PresetFile[] }];
+  "recipe.copyPreset": [{ file: string }, { path: string; text: string }];
   "recipe.compile": [{ path: string; text?: string }, { raw: unknown; meta: unknown; problems: Problem[] }];
   "anatomy.open": [{ model: string }, { id: string; name: string; layers: number; kind: "moe" | "dense"; summary: string }];
   "anatomy.summary": [Record<string, never>, AnatomySummary];
@@ -125,7 +131,7 @@ export type HelperResult<M extends HelperMethod> = HelperMethods[M][1];
 
 export const HELPER_METHODS = [
   "recipe.lint", "recipe.plan", "recipe.steps", "recipe.devices", "recipe.bundle", "recipe.fromToml",
-  "recipe.fromPreset", "recipe.compile", "anatomy.open", "anatomy.summary", "anatomy.get",
+  "recipe.fromPreset", "recipe.presets", "recipe.presetFiles", "recipe.copyPreset", "recipe.compile", "anatomy.open", "anatomy.summary", "anatomy.get",
   "functions.list", "functions.source", "functions.fork",
 ] as const satisfies readonly HelperMethod[];
 

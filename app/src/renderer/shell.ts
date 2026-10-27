@@ -1,7 +1,7 @@
 // The app shell: layout (title bar, activity bar, sidebar, tabs + editor, bottom panel, right
 // panel, status bar) and the registries behind RendererContext.
 
-import { h, clear, basename, debounce, ICONS } from "./dom";
+import { h, clear, basename, debounce, ICONS, FILE_DRAG } from "./dom";
 import { bh, helper } from "./bridge";
 import { EditorManager, type EditorView } from "./editor/monaco";
 import { contextMenu, showModal, toast } from "./ui";
@@ -404,7 +404,7 @@ export class Shell {
       this.moveTab(this.dragTab, g, g.tabs.length);
     });
     drop.addEventListener("dragover", (e) => {
-      if (!this.dragTab) return;
+      if (!this.dragTab && !e.dataTransfer?.types.includes(FILE_DRAG)) return;
       e.preventDefault();
       const r = host.getBoundingClientRect();
       drop.dataset.zone = dropZone((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
@@ -414,6 +414,20 @@ export class Shell {
       const tab = this.dragTab;
       const zone = drop.dataset.zone as Side | "center" | undefined;
       delete drop.dataset.zone;
+      const file = e.dataTransfer?.getData(FILE_DRAG);
+      document.body.classList.remove("tab-drag");
+      if (!tab && file && zone) {
+        // A recipe or function dragged in from the side bar: open it here, or in a new split on an edge.
+        e.preventDefault();
+        if (zone === "center") void this.openFile(file, undefined, { group: g });
+        else {
+          const ng = this.newGroup();
+          this.layout = split(this.layout, g, ng, zone);
+          this.renderLayout();
+          void this.openFile(file, undefined, { group: ng });
+        }
+        return;
+      }
       if (!tab || !zone) return;
       e.preventDefault();
       if (zone === "center") this.moveTab(tab, g, g.tabs.length);
@@ -961,6 +975,9 @@ export class Shell {
       // Plain keys (no Cmd/Ctrl) keep their meaning in text fields and terminals.
       if (inField && !/(cmd|ctrl)\+/i.test(b.keys)) return;
       if (b.keys === "Shift+Tab" && inMonaco && this.editor.view()?.editor.getSelections()?.some((s) => !s.isEmpty())) return;
+      // Outside the editor and its tab strips Shift+Tab keeps moving focus backwards (buttons,
+      // dialogs, side bars), as everywhere else on macOS.
+      if (b.keys === "Shift+Tab" && !inMonaco && t && t !== document.body && !t.closest(".group")) return;
       return run(b.command, b.args);
     }
     for (const c of this.commands.values()) if (c.keybinding && matches(c.keybinding, e)) return run(c.id);
@@ -1035,10 +1052,17 @@ export class Shell {
     }
   }
 
-  setProblems(path: string, problems: Problem[]): void {
-    if (problems.length) this.problems.set(path, problems);
+  /** Problems per file and source: lint runs on every edit and must not wipe what the last plan found. */
+  private problemSources = new Map<string, Map<"lint" | "plan", Problem[]>>();
+
+  setProblems(path: string, problems: Problem[], source: "lint" | "plan" = "lint"): void {
+    const by = this.problemSources.get(path) ?? new Map<"lint" | "plan", Problem[]>();
+    by.set(source, problems);
+    this.problemSources.set(path, by);
+    const merged = [...by.values()].flat();
+    if (merged.length) this.problems.set(path, merged);
     else this.problems.delete(path);
-    this.editor.setProblems(path, problems);
+    this.editor.setProblems(path, merged);
     const all = [...this.problems.values()].flat();
     const errors = all.filter((p) => p.severity === "error").length;
     const warns = all.filter((p) => p.severity === "warning").length;

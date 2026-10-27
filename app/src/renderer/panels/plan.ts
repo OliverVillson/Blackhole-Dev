@@ -62,7 +62,7 @@ export class PlanPanel {
     try {
       const result = await helper("recipe.plan", { path: file, text: b?.model.getValue(), device: this.device.value || "mac16" });
       this.last = { file, result, ms: performance.now() - t0 };
-      this.shell.setProblems(file, result.problems);
+      this.shell.setProblems(file, result.problems, "plan");
     } catch (e) {
       this.last = null;
       clear(this.body);

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import re
+from pathlib import Path
 
 from blackhole_dev.recipe import pipeline as pl
 from blackhole_dev.recipe.core import Recipe, RecipeError
@@ -31,12 +32,21 @@ def lint(path=None, text: str | None = None, publish: bool = False) -> tuple[Rec
     try:
         r = load(path, text)
     except RecipeError as e:
-        return None, e.problems or [_p(str(e), 1, code="recipe.error", file=fname)]
+        probs = e.problems or [_p(str(e), 1, code="recipe.error", file=fname)]
+        if [p.get("code") for p in probs] == ["recipe.none"] and _defines_functions(path, text):
+            return None, []      # a functions file (forks, your own): it ran clean, it just builds no recipe
+        return None, probs
     probs = lint_recipe(r, publish)
     for p in probs:
         if fname:
             p.setdefault("file", fname)
     return r, probs
+
+
+def _defines_functions(path, text: str | None) -> bool:
+    if text is None and path is not None:
+        text = Path(path).read_text()
+    return bool(re.search(r"^@function\(", text or "", re.M))
 
 
 def _line_of(r: Recipe, msg: str) -> int:

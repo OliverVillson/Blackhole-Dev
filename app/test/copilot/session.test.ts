@@ -6,7 +6,7 @@ import { FakeEditor } from "./fakeEditor";
 type Script = (req: TurnRequest, t: Tools) => AsyncGenerator<LlmChunk>;
 interface Tools { pump(n?: number): void; ed: FakeEditor; aborted: Promise<void> }
 
-function setup(scripts: Script[], opts: { active?: string; disk?: Record<string, string>; helper?: (method: string, params: any) => unknown } = {}) {
+function setup(scripts: Script[], opts: { active?: string; disk?: Record<string, string>; helper?: (method: string, params: any) => unknown; invoke?: (channel: string, payload: any) => unknown } = {}) {
   const ed = new FakeEditor();
   const reqs: TurnRequest[] = [];
   const helperCalls: [string, any][] = [];
@@ -46,6 +46,7 @@ function setup(scripts: Script[], opts: { active?: string; disk?: Record<string,
     },
     invoke: async (channel, payload) => {
       invokes.push([channel, payload]);
+      if (opts.invoke) return opts.invoke(channel, payload);
       return { approved: false };
     },
     every: (_ms, fn) => {
@@ -181,6 +182,33 @@ describe("CopilotSession", () => {
     await t.session.ask("run it on the b300");
     t.done();
     expect(t.invokes).toEqual([["vm:copilot.launch", { action: "run.launch", why: "Run the recipe on your B300", recipe: "r.py", host: "b300", requestedBy: "copilot" }]]);
+  });
+
+  it("run_analysis goes through the analysis module as the copilot, so a big read still asks the user", async () => {
+    const t = setup(
+      [
+        async function* () {
+          yield { type: "tool_use", id: "a1", name: "run_analysis", input: { name: "expert-stats", model: "/m/qwen", params: { layer: 3 } } };
+          yield { type: "tool_use", id: "a2", name: "run_analysis", input: { name: "weight-histogram", model: "/m/qwen" } };
+          yield { type: "done", finishReason: "tool_use" };
+        },
+        async function* (req) {
+          const [r1, r2] = req.messages.at(-1)!.content as any[];
+          expect(r1.content).toContain("hot experts");
+          expect(r2.content).toContain("declined");
+          yield { type: "done", finishReason: "stop" };
+        },
+      ],
+      {
+        invoke: (_c, p) => (p.name === "expert-stats" ? { ok: true, report: { title: "hot experts" } } : { ok: false, cancelled: true }),
+      },
+    );
+    await t.session.ask("which experts are hot in layer 3?");
+    t.done();
+    expect(t.invokes).toEqual([
+      ["analysis:run", { name: "expert-stats", model: "/m/qwen", params: { layer: 3 }, requestedBy: "copilot" }],
+      ["analysis:run", { name: "weight-histogram", model: "/m/qwen", requestedBy: "copilot" }],
+    ]);
   });
 
   it("edit_file refuses to touch locked user lines", async () => {

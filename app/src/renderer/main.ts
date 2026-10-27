@@ -4,7 +4,8 @@ import * as monaco from "monaco-editor";
 import { Shell } from "./shell";
 import { bh, helper } from "./bridge";
 import { ICONS, basename } from "./dom";
-import { prompt, toast } from "./ui";
+import { toast } from "./ui";
+import { pickPreset } from "./presets";
 import { recipesView, newRecipe, newFunction, newFolder } from "./views/recipes";
 import { functionsView, showFunction, forkFunction } from "./views/functions";
 import { Anatomy } from "./views/anatomy";
@@ -65,14 +66,7 @@ async function boot(): Promise<void> {
     await shell.executeCommand("recipes.refresh");
     shell.openFile(r.path);
   });
-  cmd("recipe.fromPreset", "New recipe from a preset", async () => {
-    const id = await prompt("Start from a preset", "Preset id (for example qwen-mac-qhex, mac-qhex, moe-prune-int4)", "qwen-mac-qhex", "Create");
-    if (!id) return;
-    const r = await helper("recipe.fromPreset", { id, out: shell.paths.recipes }).catch(report);
-    if (!r) return;
-    await shell.executeCommand("recipes.refresh");
-    shell.openFile(r.path);
-  });
+  cmd("recipe.fromPreset", "New recipe from a preset", () => pickPreset(shell).catch(report));
   cmd("file.save", "Save", async () => {
     const p = shell.activeFile();
     if (p) await shell.editor.save(p).catch(report);

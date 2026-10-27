@@ -309,6 +309,9 @@ export function renderTab(root: HTMLElement, ctx: RendererContext, store: Analys
         status.textContent = "";
         foot.textContent = `${r.model ? r.model.split(/[\\/]/).pop() + " · " : ""}read ${fmtBytes(r.reads)} in ${r.seconds < 1 ? `${Math.round(r.seconds * 1000)} ms` : `${r.seconds.toFixed(1)} s`}`;
         if (r.title) title.textContent = r.title;
+        // the model may have been opened elsewhere (Anatomy) since this tab drew: say which one ran
+        if (r.model && !state.model && !store.model) modelLine.textContent = `Model: ${r.model.split(/[\\/]/).pop()} (the one open in Anatomy)`;
+        void showEstimate();
       } else if ("cancelled" in out && out.cancelled) {
         status.textContent = "Not run: the read was not approved.";
       } else {
@@ -326,12 +329,14 @@ export function renderTab(root: HTMLElement, ctx: RendererContext, store: Analys
   };
 
   const title = el("h2");
+  const modelLine = el("p", "an-doc");
   const draw = () => {
     const a = state.name ? store.get(state.name) : undefined;
     title.textContent = a?.title ?? (state.path ? state.path.split(/[\\/]/).pop()! : state.name ?? "Analysis");
     head.replaceChildren(title);
     if (a?.doc) head.append(el("p", "an-doc", a.doc));
-    head.append(el("p", "an-doc", `Model: ${a?.needs === "none" ? "not needed" : store.modelLabel(state.model ?? store.model)}`));
+    modelLine.textContent = `Model: ${a?.needs === "none" ? "not needed" : store.modelLabel(state.model ?? store.model)}`;
+    head.append(modelLine);
     bar.replaceChildren();
     reads = [];
     names = [];

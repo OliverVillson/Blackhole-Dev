@@ -10,7 +10,7 @@ named-params object. Shapes are the I1 contract in
 
   initialize  shutdown
   recipe.lint recipe.compile recipe.steps recipe.plan recipe.devices recipe.bundle
-  recipe.fromToml recipe.fromPreset recipe.presets
+  recipe.fromToml recipe.fromPreset recipe.presets recipe.presetFiles recipe.copyPreset
   anatomy.open anatomy.summary anatomy.children anatomy.get
   functions.list functions.source functions.fork
   analysis.list analysis.source analysis.fork analysis.estimate analysis.run
@@ -62,7 +62,8 @@ class Helper:
             "recipe.lint": self.recipe_lint, "recipe.compile": self.recipe_compile, "recipe.steps": self.recipe_steps,
             "recipe.plan": self.recipe_plan, "recipe.devices": self.recipe_devices, "recipe.bundle": self.recipe_bundle,
             "recipe.fromToml": self.recipe_from_toml, "recipe.fromPreset": self.recipe_from_preset,
-            "recipe.presets": self.recipe_presets,
+            "recipe.presets": self.recipe_presets, "recipe.presetFiles": self.recipe_preset_files,
+            "recipe.copyPreset": self.recipe_copy_preset,
             "anatomy.open": self.anatomy_open, "anatomy.summary": self.anatomy_summary,
             "anatomy.children": self.anatomy_children, "anatomy.get": self.anatomy_get,
             "functions.list": self.functions_list, "functions.source": self.functions_source,
@@ -298,6 +299,20 @@ class Helper:
             return {"presets": []}
         return {"presets": [{"id": s.id, "name": s.name, "author": s.author, "summary": s.summary,
                              "pipeline": bool(s.stage_list), "tags": list(s.tags)} for s in SCHEMAS]}
+
+    def recipe_preset_files(self, p: dict) -> dict:
+        from blackhole_dev.recipe import presets
+        return {"presets": presets.files()}
+
+    def recipe_copy_preset(self, p: dict) -> dict:
+        from blackhole_dev.recipe import presets
+        src = self._path(p, "file")
+        dst = self._out_for({}, src.stem)
+        try:
+            text = presets.copy(src, dst)
+        except ValueError as e:
+            raise RpcError(-32602, str(e)) from None
+        return {"path": str(dst), "text": text}
 
     # ------------------------------------------------------------------ anatomy
     def anatomy_open(self, p: dict) -> dict:

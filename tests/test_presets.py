@@ -4,6 +4,7 @@ and running them runs exactly the job the pipeline's own presets run."""
 from __future__ import annotations
 
 import importlib.util
+import io
 from pathlib import Path
 
 import pytest
@@ -123,3 +124,25 @@ def test_committed_presets_match_the_generator_where_the_catalog_agrees():
         run_recipe(load(p), rec)
         if rec.knobs == {k: v for s in sc.steps for k, v in s.params.items()}:
             assert p.read_text() == mp.source(sc), sc.id
+
+
+def test_the_app_lists_the_preset_files_and_copies_one_into_the_recipes_folder(tmp_path):
+    from blackhole_dev.recipe import presets
+    from blackhole_dev.rpc import Helper
+
+    rows = presets.files()
+    ids = {r["id"] for r in rows}
+    assert {p.stem.replace("_", "-") for p in RECIPES} <= ids and "reapq-hex-scratch" in ids
+    scratch = next(r for r in rows if r["id"] == "reapq-hex-scratch")
+    assert scratch["group"] == "from scratch" and scratch["title"] == "REAP/Q-HEX from scratch"
+    r, probs = lint(scratch["file"])                                 # written without built-ins, still lints clean
+    assert r is not None and not [p for p in probs if p.get("severity") == "error"], probs
+
+    srv = Helper(out=io.StringIO())
+    srv.initialize({"workspace": str(tmp_path), "recipesDir": str(tmp_path / "recipes")})
+    out = srv.recipe_copy_preset({"file": scratch["file"]})
+    again = srv.recipe_copy_preset({"file": scratch["file"]})
+    assert out["path"] == str(tmp_path / "recipes" / "reapq_hex_scratch.py") and again["path"].endswith("_2.py")
+    assert out["text"] == Path(scratch["file"]).read_text()
+    with pytest.raises(Exception, match="not a preset"):
+        srv.recipe_copy_preset({"file": str(tmp_path / "recipes" / "reapq_hex_scratch.py")})

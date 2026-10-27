@@ -1,8 +1,8 @@
-// Licence seam. The paywall is undecided, so this allows everything. Every paid feature asks
-// this one function, so the real check can drop in here later.
+// Licence seam. BlackHole-Dev is open source (Apache-2.0) with nothing gated, so this allows
+// everything; it stays the one place a check would go if that ever changes.
 
 import type { Licence } from "../shared/ext";
 
 export function status(): Licence {
-  return { ok: true, tier: "dev", reason: "no licence check yet" };
+  return { ok: true, tier: "dev", reason: "open source, Apache-2.0" };
 }

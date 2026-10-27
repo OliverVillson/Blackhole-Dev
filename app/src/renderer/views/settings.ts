@@ -36,7 +36,7 @@ export function settingsView(shell: Shell): (el: HTMLElement) => void {
     const key = h("input", { type: "password", placeholder: "sk-ant-…", "aria-label": "Anthropic API key", style: "width:100%", autocomplete: "off" });
     const refreshKey = () => bh.invoke<boolean>("secrets:has", "anthropic-api-key").then((has) => (keyState.textContent = has ? "key set (stored in the macOS Keychain)" : "no key yet"));
     const licence = h("div", { class: "meta" });
-    bh.invoke<{ licence: Licence; version: string }>("app:info").then((i) => (licence.textContent = `BlackHole-Dev ${i.version} · licence: ${i.licence.ok ? "active" : "inactive"} (${i.licence.reason ?? i.licence.tier})`));
+    bh.invoke<{ licence: Licence; version: string }>("app:info").then((i) => (licence.textContent = `BlackHole-Dev ${i.version} · ${i.licence.reason ?? (i.licence.ok ? "licence active" : "licence inactive")}`));
     const checks = h("div", { style: "display:flex;flex-direction:column;gap:4px;padding:0 4px" });
 
     view.append(
