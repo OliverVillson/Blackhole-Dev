@@ -12,7 +12,6 @@ const GROUPS: [ThemeGroup, string][] = [
   ["greyscale", "Greyscale"],
   ["beige", "Beige and red"],
   ["classic", "Classic schemes"],
-  ["experimental", "Experimental"],
 ];
 
 export async function setTheme(id: string): Promise<void> {

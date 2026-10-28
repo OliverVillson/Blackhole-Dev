@@ -37,7 +37,7 @@ describe("themes", () => {
     const v = t.vars;
     // Body text: our own themes clear 7:1 (Nightside is dim on purpose, about 8:1). The classic
     // schemes keep their published colours, which only promise WCAG AA (Solarized Light is 5:1),
-    // and so do two experimental ones: Four Shades has only the four LCD greens (6:1) and
+    // and so do two of ours: Four Shades has only the four LCD greens (6:1) and
     // red-only Observatory cannot pass 5.3:1 on black.
     const body = t.group === "classic" || t.id === "four-shades" || t.id === "observatory" ? 4.5 : 7;
     expect(contrast(v.text, v.void)).toBeGreaterThanOrEqual(body);
