@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, existsSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Secrets, type Cipher } from "../src/main/secrets";
 import { Host } from "../src/main/host";
 import { Workspace, ensureWorkspace, workspacePaths } from "../src/main/workspace";
-import { pickPython } from "../src/main/python";
+import { devFix, pickPython, runChecks, sourceCheckout, venvCandidates } from "../src/main/python";
 import { status } from "../src/main/licence";
 
 const rot: Cipher = {
@@ -81,8 +81,31 @@ describe("workspace", () => {
 
 describe("python and licence", () => {
   it("prefers the setting, then python3", () => {
-    expect(pickPython("/opt/py/bin/python3", undefined)).toBe("/opt/py/bin/python3");
-    expect(pickPython("", "/nonexistent")).toBe("python3");
+    expect(pickPython("/opt/py/bin/python3", undefined, [])).toBe("/opt/py/bin/python3");
+    expect(pickPython("", "/nonexistent", [])).toBe("python3");
+  });
+  it("finds the source checkout's venv when nothing is set, and never names a PyPI package that does not exist", async () => {
+    const home = mkdtempSync(join(tmpdir(), "bhd-home-"));
+    const py = join(home, "bhdev-venv", "bin", "python");
+    mkdirSync(join(home, "bhdev-venv", "bin"), { recursive: true });
+    writeFileSync(py, "");
+    const cands = venvCandidates({}, home);
+    expect(pickPython("", undefined, cands)).toBe(py);
+    expect(pickPython("/gone/venv/bin/python", undefined, cands)).toBe(py);   // a deleted venv in the setting
+    expect(pickPython(py, undefined, [])).toBe(py);
+    expect(pickPython("python3.12", undefined, cands)).toBe("python3.12");            // a bare name is looked up on PATH
+    expect(venvCandidates({ VIRTUAL_ENV: "/v" }, home)[0]).toBe("/v/bin/python");
+    const repo = mkdtempSync(join(tmpdir(), "bhd-repo-"));
+    mkdirSync(join(repo, "app"));
+    writeFileSync(join(repo, "pyproject.toml"), '[project]\nname = "blackhole-dev"\n');
+    expect(sourceCheckout(join(repo, "app"))).toBe(repo);
+    expect(sourceCheckout("/nonexistent/app")).toBeNull();
+    expect(devFix(py, repo)).toBe(`${py} -m pip install -e ${repo}  (or set Settings > Python helper to the venv that has it)`);
+    expect(devFix(py, null)).toMatch(/Settings > Python helper/);
+    const checks = await runChecks("/nonexistent/python", repo);
+    const dev = checks.find((c) => c.id === "blackhole_dev")!;
+    expect(dev.ok).toBe(false);
+    expect(dev.fix).not.toMatch(/pip install blackhole-dev/);
   });
   it("licence seam allows everything for now", () => {
     expect(status()).toMatchObject({ ok: true });
