@@ -13,6 +13,7 @@ import { Host } from "./host";
 import { buildMenu } from "./menu";
 import { setupUpdates } from "./updates";
 import { HELPER_METHODS } from "../shared/rpc";
+import { settle } from "../shared/invoke";
 import { themeById } from "../shared/themes";
 import type { ConfirmAnswer, ConfirmShown } from "../shared/gate";
 import type { MainContext } from "../shared/ext";
@@ -198,7 +199,7 @@ async function main(): Promise<void> {
 
   ipcMain.handle("bh:invoke", (e: IpcMainInvokeEvent, channel: string, ...args: unknown[]) => {
     if (!win || e.sender !== win.webContents) throw new Error("not the main window");
-    return host.invoke(String(channel), args);
+    return settle(() => host.invoke(String(channel), args), (err) => log(`${channel} failed: ${(err as Error)?.stack ?? err}`));
   });
 
   const deactivators: (() => unknown)[] = [];

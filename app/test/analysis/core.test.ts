@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { forkModel, READ_BUDGET, runAnalysis, scriptTemplate, type Deps } from "../../src/analysis/core";
+import { estimateAnalysis, forkModel, MODEL_NOT_FOUND, READ_BUDGET, runAnalysis, scriptTemplate, type Deps } from "../../src/analysis/core";
 import { DEFAULT_SETTINGS, fmtBytes, fmtNum, type Estimate } from "../../src/analysis/shared";
 import type { ConfirmRequest } from "../../src/shared/gate";
 
@@ -25,6 +25,27 @@ function deps(est: Partial<Estimate>, run: (budget: number | undefined, n: numbe
 }
 
 const report = { title: "t", name: "x", blocks: [], metrics: {}, params: {}, reads: 1, seconds: 0, model: null };
+
+describe("estimateAnalysis", () => {
+  const failing = (e: Error): Deps => ({ settings: () => DEFAULT_SETTINGS, confirm: async () => true, call: (async () => { throw e; }) as Deps["call"] });
+
+  it("answers noModel instead of failing when no model is picked or open yet", async () => {
+    const est = await estimateAnalysis(failing(new Err(MODEL_NOT_FOUND, "open a model first")), { name: "layer-stats" });
+    expect(est.noModel).toBe(true);
+    expect(est.known).toBe(false);
+  });
+
+  it("still fails when a named model cannot be opened, or on any other error", async () => {
+    await expect(estimateAnalysis(failing(new Err(MODEL_NOT_FOUND, "cannot open /x")), { name: "layer-stats", model: "/x" })).rejects.toThrow("cannot open /x");
+    await expect(estimateAnalysis(failing(new Err(-32602, "name or path is required")), {})).rejects.toThrow("name or path");
+  });
+
+  it("passes a real estimate through", async () => {
+    const est = await estimateAnalysis(deps({ bytes: 42 }, () => report).d, { name: "layer-stats" });
+    expect(est.bytes).toBe(42);
+    expect(est.noModel).toBeUndefined();
+  });
+});
 
 describe("runAnalysis", () => {
   it("runs a small known read under the limit as a budget, without asking", async () => {

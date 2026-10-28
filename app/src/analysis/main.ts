@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { MainContext } from "../shared/ext";
-import { forkModel, runAnalysis, scriptTemplate, type Deps } from "./core";
+import { estimateAnalysis, forkModel, runAnalysis, scriptTemplate, type Deps } from "./core";
 import { CH, DEFAULT_SETTINGS, type AnalysisSettings, type ForkRequest, type RunRequest } from "./shared";
 
 const SETTINGS_KEY = "analysis";
@@ -22,7 +22,7 @@ export function activate(ctx: MainContext) {
   ctx.handle(CH.models, () => ctx.helper.call("model.list", {}));
   ctx.handle(CH.source, (name: string) => ctx.helper.call("analysis.source", { name }));
   ctx.handle(CH.forkScript, (name: string, newName?: string) => ctx.helper.call("analysis.fork", { name, newName }));
-  ctx.handle(CH.estimate, (req: RunRequest) => ctx.helper.call("analysis.estimate", { ...req, params: req.params ?? {} }));
+  ctx.handle(CH.estimate, (req: RunRequest) => estimateAnalysis(deps, req));
   ctx.handle(CH.run, (req: RunRequest) => runAnalysis(deps, req));
   ctx.handle(CH.forkModel, (req: ForkRequest) => forkModel(deps, req));
   ctx.handle(CH.lineage, (path: string) => ctx.helper.call("model.lineage", { path }));
