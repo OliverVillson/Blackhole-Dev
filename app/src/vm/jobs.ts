@@ -28,7 +28,7 @@ export interface JobsDeps {
   cloud: CloudRunner;
   paths: { models: string };
   /** The blackhole_dev wheel shipped inside the app, installed on a VM that lacks it or has another version. */
-  devWheel?: () => { path: string; version: string } | null;
+  devWheel?: () => { path: string; version: string } | null | Promise<{ path: string; version: string } | null>;
   notify?: (title: string, body: string) => void;
   now?: () => Date;
   /** Reconnect delays for a dropped events.log tail, in ms. */
@@ -55,6 +55,19 @@ interface Watch {
 /** Jobs the app launched, kept across restarts so their watch, notification and copy-back resume. */
 interface Remembered { hostId: string; name: string; dir: string; pullWhenDone: boolean; notify: boolean; stages: string[]; pulled?: boolean; finished?: boolean }
 
+/** How long the dialog waits for the dry-run plan. It reads the base model's headers from the Hub, which
+ * should take seconds; past this the run can still go ahead, with no estimate. */
+export const PLAN_TIMEOUT_MS = 45_000;
+
+/** The pipeline's venv on a machine the probe could not read: where install.sh puts it. */
+export const DEFAULT_VENV = "~/.blackhole/venv";
+
+interface RecipeWork {
+  lint: PromiseSettledResult<{ problems: Problem[] }>;
+  bundle: PromiseSettledResult<BundleResult>;
+  plan?: PromiseSettledResult<PlanResult>;
+}
+
 const target = (h: Host): SshTarget => ({ target: h.target, port: h.port, identityFile: h.identityFile });
 
 export function costLine(rate: number | undefined, currency: string | undefined, hours: number | undefined): string | undefined {
@@ -63,6 +76,21 @@ export function costLine(rate: number | undefined, currency: string | undefined,
   if (rate == null) return `[your VM hourly rate] × ~${h} h`;
   const c = currency ?? "$";
   return `${c}${rate.toFixed(2)}/h × ~${h} h ≈ ${c}${(rate * hours).toFixed(2)}`;
+}
+
+/** Where the base model comes from on the VM, and whether that download needs a Hugging Face token. */
+export function baseModelCheck(model: string, plan: PlanResult | undefined, p: Probe | undefined): Check {
+  const c = (tone: Check["tone"], detail: string): Check => ({ id: "model", label: "Base model", tone, detail });
+  if (model.startsWith("/") || model.startsWith("~/") || model.startsWith("./")) return c("info", `${model} · a folder on the VM`);
+  if (p?.models?.includes(model)) return c("ok", `${model} · already on the VM`);
+  const size = plan?.baseGb ? `~${plan.baseGb.toFixed(0)} GB, ` : "";
+  if (plan?.gated === true) {
+    if (p && !p.hfToken) return c("bad", `${model} is gated on Hugging Face and the VM has no token. Accept its licence on huggingface.co, then run \`hf auth login\` on the VM and check again`);
+    return c("info", `${model} · downloads on the VM (${size}gated: uses the VM's Hugging Face token)`);
+  }
+  if (plan?.gated === false) return c("info", `${model} · downloads on the VM (${size}public, no Hugging Face token needed)`);
+  return c(p && !p.hfToken ? "warn" : "info", `${model} · downloads on the VM` +
+    (p && !p.hfToken ? "; could not check whether it is gated, and the VM has no Hugging Face token (public models do not need one)" : ""));
 }
 
 export function sha256File(path: string): Promise<string> {
@@ -93,6 +121,9 @@ export class JobsService {
   private readonly plans = new Map<string, LaunchPlan>();
   private readonly watches = new Map<string, Watch>();
   private readonly homes = new Map<string, Probe>();
+  /** Lint, bundle and plan of a recipe in flight: they do not depend on the machine, and the helper runs
+   * one request at a time, so picking another machine mid-check must not queue them all again. */
+  private readonly recipeWork = new Map<string, Promise<RecipeWork>>();
   private readonly now: () => Date;
 
   constructor(private readonly d: JobsDeps) {
@@ -144,7 +175,9 @@ export class JobsService {
     if (!h.target) throw new Error(`${h.label} has no address yet (state: ${h.state ?? "unknown"})`);
     const r = await this.d.remote.exec(target(h), `python3 - ${cmd.q(h.venv ?? "")}`, { input: PROBE_PY, timeoutMs: 120_000 });
     if (r.code !== 0) {
-      throw new Error(r.code === 255 ? explainSshError(r.stderr, r.code) : `probe failed on ${h.label}: ${(r.stderr || r.stdout).trim().split("\n").pop()}`);
+      const why = (r.stderr || r.stdout).trim().split("\n").pop();
+      throw new Error(r.code === 255 ? explainSshError(r.stderr, r.code)
+        : `probe failed on ${h.label} (${h.target}), exit ${r.code}: ${why || "no output; is python3 installed there?"}`);
     }
     const last = r.stdout.trim().split("\n").pop() ?? "";
     let p: Probe;
@@ -244,11 +277,8 @@ export class JobsService {
   async prepare(recipePath: string, hostId: string, o?: { jobName?: string } | null): Promise<LaunchPlan> {
     const host = this.d.hosts.get(hostId);
     const checks: Check[] = [];
-    const [lint, bundle, probe] = await Promise.allSettled([
-      this.d.helper.call<{ problems: Problem[] }>("recipe.lint", { path: recipePath }),
-      this.d.helper.call<BundleResult>("recipe.bundle", { path: recipePath }),
-      this.probe(hostId),
-    ]);
+    const [work, probe] = await Promise.all([this.recipeChecks(recipePath), Promise.allSettled([this.probe(hostId)]).then((r) => r[0])]);
+    const { lint, bundle } = work;
 
     if (lint.status === "fulfilled") {
       const errs = lint.value.problems.filter((p) => p.severity === "error");
@@ -278,14 +308,20 @@ export class JobsService {
     } else checks.push({ id: "bundle", label: "Bundle", tone: "bad", detail: (bundle.reason as Error).message });
 
     let plan: PlanResult | undefined;
-    if (manifest) {
-      try {
-        plan = await this.d.helper.call<PlanResult>("recipe.plan", { path: recipePath, device: manifest.target });
-        const tone = plan.fits === false ? "warn" : "ok";
+    if (manifest && work.plan) {
+      if (work.plan.status === "fulfilled") {
+        plan = work.plan.value;
+        const noModel = plan.problems?.find((x) => x.code === "plan.no-model");
+        const tone = plan.fits === false || noModel ? "warn" : "ok";
         checks.push({ id: "plan", label: "Dry-run plan", tone,
-          detail: [plan.sizeGb != null ? `${plan.sizeGb.toFixed(1)} GB` : null, plan.fits === false ? `does not fit ${manifest.target ?? "the target"}` : plan.fits ? "fits" : null].filter(Boolean).join(" · ") || "ok" });
-      } catch (e) {
-        checks.push({ id: "plan", label: "Dry-run plan", tone: "warn", detail: (e as Error).message });
+          detail: noModel ? `no size estimate: ${noModel.message}`
+            : [plan.sizeGb != null ? `${plan.sizeGb.toFixed(1)} GB` : null, plan.fits === false ? `does not fit ${manifest.target ?? "the target"}` : plan.fits ? "fits" : null].filter(Boolean).join(" · ") || "ok" });
+      } else {
+        const msg = (work.plan.reason as Error).message;
+        checks.push({ id: "plan", label: "Dry-run plan", tone: "warn",
+          detail: /timed out/.test(msg)
+            ? `no estimate: reading ${manifest.base_model || "the base model"}'s headers took over ${PLAN_TIMEOUT_MS / 1000}s (is huggingface.co reachable from this Mac?). The run can still go ahead.`
+            : `no estimate: ${msg}. The run can still go ahead.` });
       }
     }
 
@@ -304,12 +340,13 @@ export class JobsService {
       const needsDev = manifest && (manifest.runner === "core" || (manifest.functions?.length ?? 0) > 0);
       const want = manifest?.blackhole_dev_version;
       if (needsDev && want && p.blackholeDev !== want) {
-        const wheel = this.d.devWheel?.();
+        const wheel = await Promise.resolve(this.d.devWheel?.()).catch(() => null);
         if (wheel && wheel.version === want && p.venv) {
           installDev = wheel.path;
           checks.push({ id: "blackhole-dev", label: "blackhole_dev on VM", tone: "info", detail: `${p.blackholeDev ?? "missing"}; installs ${want} first` });
         } else {
-          checks.push({ id: "blackhole-dev", label: "blackhole_dev on VM", tone: "bad", detail: `${p.blackholeDev ?? "missing"}, the recipe needs ${want}` });
+          checks.push({ id: "blackhole-dev", label: "blackhole_dev on VM", tone: "bad", detail: `${p.blackholeDev ?? "missing"}, the recipe needs ${want}` +
+            (wheel ? ` (this Mac has ${wheel.version})` : "; the app could not build a wheel from its blackhole_dev checkout (is the Python helper set in Settings?)") });
         }
       } else if (needsDev) {
         checks.push({ id: "blackhole-dev", label: "blackhole_dev on VM", tone: "ok", detail: p.blackholeDev ?? "" });
@@ -332,14 +369,14 @@ export class JobsService {
     } else {
       checks.push({ id: "ssh", label: "SSH", tone: "bad", detail: (probe.reason as Error).message });
     }
-    if (manifest?.base_model) checks.push({ id: "model", label: "Base model", tone: "info", detail: `${manifest.base_model} · downloads on the VM if missing` });
+    if (manifest?.base_model) checks.push(baseModelCheck(manifest.base_model, plan, p));
 
     const name = o?.jobName ?? cmd.jobName(manifest?.name ?? recipePath.split("/").pop() ?? "recipe", this.now());
     if (!cmd.validJobName(name)) checks.push({ id: "lint", label: "Job name", tone: "bad", detail: `"${name}" has characters a folder name cannot` });
     const home = p?.home ?? "~/.blackhole";
     const dir = cmd.jobDir(home, name);
     const session = cmd.tmuxName(name);
-    const venv = p?.venv ?? host.venv ?? "~/bh-venv";
+    const venv = p?.venv ?? host.venv ?? DEFAULT_VENV;
     const steps: LaunchPlan["steps"] = [
       { title: "make the job folder", cmd: `ssh ${host.target} ${cmd.q(cmd.mkdirJob(dir))}` },
       { title: `send the bundle (recipe + pinned functions), ${fmtBytes(bytes)}`, cmd: `rsync ${bundlePath.split("/").pop() || "recipe.bhr"} ${host.target}:${dir}/recipe.bhr` },
@@ -371,6 +408,29 @@ export class JobsService {
     return lp;
   }
 
+  /** Lint, bundle and dry-run plan of a recipe, shared by checks that overlap (another machine picked
+   * while the first check still runs). The plan waits for the bundle: the helper answers one at a time. */
+  private recipeChecks(recipePath: string): Promise<RecipeWork> {
+    const cur = this.recipeWork.get(recipePath);
+    if (cur) return cur;
+    const settle = <T,>(p: Promise<T>) => Promise.allSettled([p]).then((r) => r[0]);
+    const run = (async (): Promise<RecipeWork> => {
+      const [lint, bundle] = await Promise.all([
+        settle(this.d.helper.call<{ problems: Problem[] }>("recipe.lint", { path: recipePath })),
+        settle(this.d.helper.call<BundleResult>("recipe.bundle", { path: recipePath })),
+      ]);
+      const manifest = bundle.status === "fulfilled" ? bundle.value.manifest : undefined;
+      const plan = manifest
+        ? await settle(this.d.helper.call<PlanResult>("recipe.plan", { path: recipePath, device: manifest.target }, PLAN_TIMEOUT_MS))
+        : undefined;
+      return { lint, bundle, plan };
+    })();
+    this.recipeWork.set(recipePath, run);
+    const done = () => { if (this.recipeWork.get(recipePath) === run) this.recipeWork.delete(recipePath); };
+    run.then(done, done);
+    return run;
+  }
+
   /** Runs a prepared plan after the human click. Returns null when the click was Cancel. */
   async launch(planId: string, o: LaunchOptions): Promise<JobRef | null> {
     const plan = this.plans.get(planId);
@@ -398,7 +458,7 @@ export class JobsService {
     const say = this.vmLog("launch");
     const t = target(host);
     const p = this.homes.get(host.id);
-    const venv = p?.venv ?? host.venv ?? "~/bh-venv";
+    const venv = p?.venv ?? host.venv ?? DEFAULT_VENV;
     const home = p?.home ?? "~/.blackhole";
     const must = async (what: string, c: string, input?: string | Buffer) => {
       const r = await this.d.remote.exec(t, c, { input, timeoutMs: 600_000 });

@@ -36,6 +36,37 @@ describe("Run on VM dialog", () => {
     expect(api.launch).toHaveBeenCalledWith("p1", { pullWhenDone: true, notify: true });
     expect(launched).toHaveBeenCalledWith({ hostId: "ssh:b300", name: plan.jobName });
   });
+  it("shows only the check of the machine picked now, even when an older check answers last", async () => {
+    const orb = { ...host, id: "ssh:orb", label: "orb", target: "orb" };
+    const reaper = { ...host, id: "ssh:reaper", label: "oliver-reaper", target: "oliver-reaper@204.12.178.65" };
+    let slow!: (p: LaunchPlan) => void;
+    const prepare = vi.fn((_r: string, id: string) => id === "ssh:orb"
+      ? new Promise<LaunchPlan>((r) => (slow = r))
+      : Promise.resolve({ ...plan, id: "p-reaper", host: reaper, checks: [{ id: "ssh", label: "SSH", tone: "ok" as const, detail: reaper.target }],
+        steps: [{ title: "make the job folder", cmd: `ssh ${reaper.target} mkdir` }] }));
+    const api = fakeApi({ hosts: vi.fn(async () => [orb, reaper]), prepare });
+    render(<RunOnVm api={api} recipe="/w/r.py" close={() => {}} onLaunched={() => {}} />);
+    await act(async () => {});
+    expect(prepare).toHaveBeenLastCalledWith("/w/r.py", "ssh:orb");
+    await act(async () => fireEvent.click(screen.getByText("oliver-reaper")));
+    await screen.findByText(`ssh ${reaper.target} mkdir`, { exact: false });
+    await act(async () => slow({ ...plan, id: "p-orb", host: orb, checks: [{ id: "ssh", label: "SSH", tone: "bad", detail: "probe failed on orb" }], steps: [{ title: "x", cmd: "ssh orb mkdir" }] }));
+    expect(screen.queryByText("probe failed on orb")).toBeNull();
+    expect(screen.queryByText("ssh orb mkdir", { exact: false })).toBeNull();
+    await act(async () => fireEvent.click(screen.getByText("Run on oliver-reaper ▸")));
+    expect(api.launch).toHaveBeenCalledWith("p-reaper", { pullWhenDone: true, notify: true });
+  });
+  it("starts on the machine picked last time", async () => {
+    localStorage.setItem("bhvm.lastHost", "ssh:reaper");
+    const orb = { ...host, id: "ssh:orb", label: "orb", target: "orb" };
+    const reaper = { ...host, id: "ssh:reaper", label: "oliver-reaper", target: "oliver-reaper@204.12.178.65" };
+    const api = fakeApi({ hosts: vi.fn(async () => [orb, reaper]) });
+    render(<RunOnVm api={api} recipe="/w/r.py" close={() => {}} onLaunched={() => {}} />);
+    await act(async () => {});
+    expect(api.prepare).toHaveBeenCalledWith("/w/r.py", "ssh:reaper");
+    expect(api.prepare).not.toHaveBeenCalledWith("/w/r.py", "ssh:orb");
+    localStorage.clear();
+  });
   it("keeps Run disabled when a check failed", async () => {
     const api = fakeApi({ prepare: vi.fn(async () => ({ ...plan, ok: false, checks: [{ id: "gpu", label: "GPU", tone: "bad", detail: "nvidia-smi sees no GPU" }] })) });
     render(<RunOnVm api={api} recipe="/w/r.py" close={() => {}} onLaunched={() => {}} />);

@@ -1,6 +1,8 @@
 // WS5 main side: registers the vm:* handlers (I6 jobs API) with the shell.
 
-import { existsSync, readdirSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { existsSync, mkdtempSync, readdirSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pythonCloud } from "./cloud";
 import type { VmMainContext } from "./ctx";
@@ -18,6 +20,36 @@ function shippedWheel(): { path: string; version: string } | null {
   return w && v ? { path: join(dir, w), version: v } : null;
 }
 
+/** Runs a python and returns its stdout; rejects with the last stderr line. */
+function py(exe: string, args: string[], timeoutMs: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(exe, args, { timeout: timeoutMs, maxBuffer: 4 << 20 }, (err, out, errOut) =>
+      err ? reject(new Error(String(errOut || err.message).trim().split("\n").pop())) : resolve(out));
+  });
+}
+
+/**
+ * A run from source (npm run dev) ships no wheel, and the repo may be private, so a VM cannot pip
+ * install blackhole_dev from GitHub. Build one from the checkout the helper imports instead: once per
+ * app session, `pip wheel --no-deps` (setuptools, a few seconds).
+ */
+export function checkoutWheel(python: () => string): () => Promise<{ path: string; version: string } | null> {
+  let built: Promise<{ path: string; version: string } | null> | null = null;
+  return () => {
+    built ??= (async () => {
+      const exe = python();
+      const out = await py(exe, ["-c", "import blackhole_dev, os; print(blackhole_dev.__version__); print(os.path.dirname(os.path.dirname(os.path.abspath(blackhole_dev.__file__))))"], 30_000);
+      const [version, root] = out.trim().split("\n");
+      if (!version || !root || !existsSync(join(root, "pyproject.toml"))) return null;
+      const dir = mkdtempSync(join(tmpdir(), "bhdev-wheel-"));
+      await py(exe, ["-m", "pip", "wheel", "--no-deps", "--quiet", "-w", dir, root], 180_000);
+      const w = readdirSync(dir).find((f) => /^blackhole_dev-.+\.whl$/.test(f));
+      return w ? { path: join(dir, w), version } : null;
+    })().catch(() => (built = null));
+    return built;
+  };
+}
+
 export async function activate(ctx: VmMainContext): Promise<{ deactivate(): void }> {
   const electron = await import("electron").catch(() => null);
   const python = () => ctx.settings.get<string>("python.path", "") || join(process.resourcesPath ?? "", "python/bin/python3");
@@ -30,7 +62,10 @@ export async function activate(ctx: VmMainContext): Promise<{ deactivate(): void
     settings: ctx.settings,
     cloud: pythonCloud(() => (existsSync(python()) ? python() : "python3")),
     paths: { models: ctx.paths.models },
-    devWheel: shippedWheel,
+    devWheel: (() => {
+      const fromCheckout = checkoutWheel(python);
+      return () => shippedWheel() ?? fromCheckout();
+    })(),
     notify: (title, body) => {
       const N = electron?.Notification;
       if (N?.isSupported()) new N({ title, body, silent: false }).show();

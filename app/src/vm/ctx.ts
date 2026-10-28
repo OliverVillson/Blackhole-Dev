@@ -14,7 +14,7 @@ export interface ConfirmRequest {
 
 export interface Gate { confirm(req: ConfirmRequest): Promise<boolean> }
 
-export interface Helper { call<T>(method: string, params?: object): Promise<T> }
+export interface Helper { call<T>(method: string, params?: object, timeoutMs?: number): Promise<T> }
 
 export interface Settings {
   get<T>(key: string, fallback: T): T;
@@ -53,7 +53,7 @@ export interface VmRendererContext {
 }
 
 /** I1 shapes this module reads (WS2: ws2-recipe.md I2b). */
-export interface Problem { severity: "error" | "warning" | "info"; message: string; file: string; line: number }
+export interface Problem { severity: "error" | "warning" | "info"; message: string; file: string; line: number; code?: string }
 
 export interface Manifest {
   format: string;
@@ -79,4 +79,6 @@ export interface PlanResult {
   fits?: boolean;
   estHours?: number;
   problems?: Problem[];
+  baseGb?: number | null;     // the base model's size on disk (bf16 headers)
+  gated?: boolean | null;     // the base model is gated on the Hub (needs a token to download); null = unknown
 }

@@ -46,6 +46,8 @@ export interface Probe {
   diskFreeGb: number;
   diskTotalGb: number;
   jobs: RemoteJob[];
+  hfToken?: boolean;          // a Hugging Face token is set up for this user (HF_TOKEN or the hf login file)
+  models?: string[];          // Hub ids already downloaded to the pipeline's models folder
 }
 
 export interface RemoteJob {
