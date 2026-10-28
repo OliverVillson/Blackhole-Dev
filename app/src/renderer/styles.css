@@ -28,6 +28,10 @@ button { font: 500 12px var(--font-ui); color: var(--text); }
 input, select, textarea { font: 13px var(--font-ui); color: var(--text); background: var(--void); border: 1px solid var(--edge); border-radius: 5px; padding: 0 10px; height: 30px; }
 textarea { height: auto; padding: 8px 10px; font-family: var(--font-mono); }
 input:focus, select:focus, textarea:focus, button:focus-visible { outline: 1px solid var(--ember); outline-offset: 0; }
+/* Radios and checkboxes are bare native dots: no text-field box around them, and no focus box (the row they sit in shows focus). */
+input[type=radio], input[type=checkbox] { height: auto; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+input[type=radio]:focus:not(:focus-visible), input[type=checkbox]:focus:not(:focus-visible) { outline: none; }
+input[type=radio]:focus-visible, input[type=checkbox]:focus-visible { outline: 1px solid var(--ember); outline-offset: 2px; }
 a { color: var(--flare); } a:hover { color: var(--ember); }
 ::-webkit-scrollbar { width: 10px; height: 10px; } ::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 5px; } ::-webkit-scrollbar-track { background: transparent; }
 
