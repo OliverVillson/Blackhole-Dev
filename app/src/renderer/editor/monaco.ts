@@ -6,9 +6,10 @@ import EditorWorker from "monaco-editor/editor/editor.worker?worker";
 import type { Theme } from "../../shared/themes";
 import { currentTheme, fontsReady, onTheme } from "../theme";
 import type { Problem } from "../../shared/rpc";
-import { bh } from "../bridge";
+import { bh, helper } from "../bridge";
 import { StreamManager } from "./stream";
 import { CompletionSource, bindTabAutofill, installCompletion } from "./autofill";
+import { narrow } from "./lang";
 
 (self as unknown as { MonacoEnvironment: monaco.Environment }).MonacoEnvironment = {
   getWorker: () => new EditorWorker(),
@@ -73,7 +74,11 @@ const EDITOR_OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = {
   wordBasedSuggestions: "off",
   suggestSelection: "first",
   suggest: { preview: true, previewMode: "subwordSmart", showStatusBar: true, insertMode: "replace" },
-  quickSuggestions: { other: true, comments: false, strings: false },
+  quickSuggestions: { other: true, comments: false, strings: true },
+  quickSuggestionsDelay: 80,
+  suggestOnTriggerCharacters: true,
+  parameterHints: { enabled: true, cycle: true },
+  hover: { enabled: "on", delay: 400 },
   model: null,
 };
 
@@ -88,6 +93,11 @@ export class EditorManager {
   private listeners = { change: new Set<(b: Buffer) => void>(), dirty: new Set<(b: Buffer) => void>(), hunks: new Set<(file: string) => void>(), cursor: new Set<(v: EditorView) => void>() };
 
   constructor(host?: HTMLElement) {
+    this.completion.backend = {
+      complete: (p) => helper("lang.complete", p),
+      signatures: (p) => helper("lang.signatures", p),
+      hover: (p) => helper("lang.hover", p),
+    };
     installCompletion(this.completion);
     if (host) this.createView(host);
     this.streams = new StreamManager({
@@ -267,14 +277,24 @@ export class EditorManager {
   setProblems(path: string, problems: Problem[]): void {
     const b = this.buffers.get(path);
     if (!b) return;
-    monaco.editor.setModelMarkers(b.model, "blackhole", problems.map((p) => ({
-      severity: SEV[p.severity] ?? monaco.MarkerSeverity.Info,
-      message: p.code ? `${p.message} (${p.code})` : p.message,
-      startLineNumber: Math.max(1, p.line),
-      startColumn: p.col ?? 1,
-      endLineNumber: p.endLine ?? Math.max(1, p.line),
-      endColumn: p.endCol ?? (p.col ? p.col + 1 : b.model.getLineMaxColumn(Math.min(Math.max(1, p.line), b.model.getLineCount()))),
-    })));
+    const lines = b.model.getLineCount();
+    monaco.editor.setModelMarkers(b.model, "blackhole", problems.map((p) => {
+      const line = Math.min(Math.max(1, p.line), lines);
+      // point at the param, function or stage the message names, not the whole line
+      const at = p.col ? null : narrow(b.model.getLineContent(line), p.message);
+      const text = b.model.getLineContent(line);
+      const indent = text.length - text.trimStart().length + 1;
+      return {
+        severity: SEV[p.severity] ?? monaco.MarkerSeverity.Info,
+        message: p.message,
+        code: p.code,
+        source: "blackhole",
+        startLineNumber: line,
+        startColumn: p.col ?? at?.start ?? indent,
+        endLineNumber: p.endLine ?? line,
+        endColumn: p.endCol ?? (p.col ? p.col + 1 : at?.end ?? b.model.getLineMaxColumn(line)),
+      };
+    }));
   }
 
   /** Insert text at the cursor as a normal (undoable) user edit. */

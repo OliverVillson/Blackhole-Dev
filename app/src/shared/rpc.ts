@@ -1,6 +1,8 @@
 // I1 helper RPC: shapes shared by the main-process client and the renderer.
 // Contract: /mnt/project-files/blackhole-dev-app/interfaces/ws1-shell.md (I1) and ws2-recipe.md.
 
+import type { Catalog, JediItem, JediSignature, LangPos } from "./lang";
+
 export type Severity = "error" | "warning" | "info";
 
 export interface Problem {
@@ -121,6 +123,10 @@ export interface HelperMethods {
   "anatomy.summary": [Record<string, never>, AnatomySummary];
   "anatomy.get": [{ query: string }, AnatomyPart];
   "functions.list": [Record<string, never>, FunctionInfo[]];
+  "lang.catalog": [Record<string, never>, Catalog];
+  "lang.complete": [LangPos, { items: JediItem[]; jedi: boolean }];
+  "lang.signatures": [LangPos, { signatures: JediSignature[] }];
+  "lang.hover": [LangPos, { contents: { signature: string; doc: string }[] }];
   "functions.source": [{ name: string }, { path: string; text: string; readonly: boolean }];
   "functions.fork": [{ name: string }, { path: string }];
 }
@@ -133,6 +139,7 @@ export const HELPER_METHODS = [
   "recipe.lint", "recipe.plan", "recipe.steps", "recipe.devices", "recipe.bundle", "recipe.fromToml",
   "recipe.fromPreset", "recipe.presets", "recipe.presetFiles", "recipe.copyPreset", "recipe.compile", "anatomy.open", "anatomy.summary", "anatomy.get",
   "functions.list", "functions.source", "functions.fork",
+  "lang.catalog", "lang.complete", "lang.signatures", "lang.hover",
 ] as const satisfies readonly HelperMethod[];
 
 export const RPC_ERRORS = { recipe: -32001, modelNotFound: -32002, cancelled: -32003 } as const;

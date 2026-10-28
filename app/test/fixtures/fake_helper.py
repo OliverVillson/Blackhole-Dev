@@ -92,6 +92,15 @@ def handle(method, params):
                 t.addfile(info, io.BytesIO(data))
         sha = hashlib.sha256(open(out, "rb").read()).hexdigest()
         return {"bundle": out, "sha256": sha, "functions": [], "manifest": manifest}
+    if method == "lang.catalog":
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "lang_catalog.json")) as f:
+            return json.load(f)
+    if method == "lang.complete":
+        return {"items": [], "jedi": False}
+    if method == "lang.signatures":
+        return {"signatures": []}
+    if method == "lang.hover":
+        return {"contents": []}
     if method == "functions.list":
         return [{"name": n, "per": p, "origin": "builtin", "path": "builtin/" + n, "doc": d} for n, p, d in BUILTINS]
     if method == "functions.source":
