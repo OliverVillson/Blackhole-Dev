@@ -2,9 +2,13 @@
 // TUI's art (BlackHole-Harness harness/blackhole_tui/art.py) and the landing page: shadow,
 // photon ring, a tilted accretion disk in front and its lensed far side bent over the top.
 
-import { THEME } from "./theme";
+import { themeById } from "./themes";
 
-const HEAT = [THEME.ash, THEME.crimson, THEME.redshift, THEME.ember, THEME.flare, THEME.photon];
+/** The active theme's hole palette (renderer/theme.ts marks the theme on <html data-theme>). */
+function palette(): { steps: string[]; shadow: string | null } {
+  const t = themeById(typeof document === "undefined" ? null : document.documentElement.dataset.theme);
+  return { steps: t.hole, shadow: t.holeShadow };
+}
 const CUTS = [0.06, 0.16, 0.3, 0.46, 0.64, 0.82];
 const DIN = 1.4, DOUT = 3.1, TILT = 0.17;
 
@@ -41,7 +45,7 @@ function intensity(x: number, y: number, px: number): number {
   return Math.min(1, Math.max(ring * 0.95, halo, back, glow));
 }
 
-/** Palette step per pixel (0 = unlit), cropped to the lit rows. */
+/** Palette step per pixel (0 = unlit, -1 = inside the shadow), cropped to the lit rows. */
 export function holePixels(cols: number): number[][] {
   const rows = Math.round(cols * 13 / 16);
   const unit = cols / 2 / (DOUT + 0.1);
@@ -49,17 +53,19 @@ export function holePixels(cols: number): number[][] {
   for (let py = 0; py < rows; py++) {
     const line: number[] = [];
     for (let px = 0; px < cols; px++) {
-      const v = intensity((px + 0.5 - cols / 2) / unit, (py + 0.5 - rows / 2) / unit, 1 / unit);
+      const x = (px + 0.5 - cols / 2) / unit, y = (py + 0.5 - rows / 2) / unit;
+      const v = intensity(x, y, 1 / unit);
       let i = 0;
       while (i < CUTS.length && v >= CUTS[i]) i++;
-      line.push(i);
+      line.push(i === 0 && Math.hypot(x, y) < 1 ? -1 : i);
     }
     grid.push(line);
   }
-  return grid.filter((line) => line.some(Boolean));
+  return grid.filter((line) => line.some((v) => v > 0));
 }
 
-/** A canvas with the hole `cols` art pixels wide, each `size` CSS pixels square. */
+/** A canvas with the hole `cols` art pixels wide, each `size` CSS pixels square. It repaints
+ *  itself when the theme changes. Light themes paint the shadow so the hole stays black. */
 export function holeCanvas(cols = 48, size = 4): HTMLCanvasElement {
   const grid = holePixels(cols);
   const k = Math.max(1, Math.round(size * (window.devicePixelRatio || 1)));
@@ -70,10 +76,17 @@ export function holeCanvas(cols = 48, size = 4): HTMLCanvasElement {
   canvas.style.height = `${grid.length * size}px`;
   const ctx = canvas.getContext("2d");
   if (!ctx) return canvas;
-  grid.forEach((line, y) => line.forEach((v, x) => {
-    if (!v) return;
-    ctx.fillStyle = HEAT[v - 1];
-    ctx.fillRect(x * k, y * k, k, k);
-  }));
+  const paint = () => {
+    const { steps, shadow } = palette();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    grid.forEach((line, y) => line.forEach((v, x) => {
+      if (v === 0 || (v < 0 && !shadow)) return;
+      ctx.fillStyle = v < 0 ? shadow! : steps[v - 1];
+      ctx.fillRect(x * k, y * k, k, k);
+    }));
+  };
+  paint();
+  const onTheme = () => (canvas.isConnected ? paint() : window.removeEventListener("bh:theme", onTheme));
+  window.addEventListener("bh:theme", onTheme);
   return canvas;
 }

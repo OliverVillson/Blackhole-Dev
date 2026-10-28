@@ -3,7 +3,8 @@
 
 import * as monaco from "monaco-editor";
 import EditorWorker from "monaco-editor/editor/editor.worker?worker";
-import { THEME } from "../../shared/theme";
+import type { Theme } from "../../shared/themes";
+import { currentTheme, fontsReady, onTheme } from "../theme";
 import type { Problem } from "../../shared/rpc";
 import { bh, helper } from "../bridge";
 import { StreamManager } from "./stream";
@@ -14,38 +15,18 @@ import { narrow } from "./lang";
   getWorker: () => new EditorWorker(),
 };
 
-const hex = (c: string) => c.replace("#", "");
-monaco.editor.defineTheme("blackhole", {
-  base: "vs-dark",
-  inherit: true,
-  rules: [
-    { token: "", foreground: hex(THEME.text) },
-    { token: "keyword", foreground: hex(THEME.ember) },
-    { token: "string", foreground: hex(THEME.flare) },
-    { token: "comment", foreground: hex(THEME.dim), fontStyle: "italic" },
-    { token: "number", foreground: "ff8c5a" },
-    { token: "tag", foreground: "e8a27a" },
-    { token: "delimiter", foreground: "c9a58f" },
-    { token: "type", foreground: hex(THEME.photon) },
-    { token: "identifier", foreground: hex(THEME.text) },
-  ],
-  colors: {
-    "editor.background": THEME.void,
-    "editor.foreground": THEME.text,
-    "editorLineNumber.foreground": "#7a5240",
-    "editorLineNumber.activeForeground": THEME.ember,
-    "editor.lineHighlightBackground": "#140602",
-    "editor.selectionBackground": "#4a0d0288",
-    "editorCursor.foreground": THEME.ember,
-    "editorWidget.background": THEME.bg2,
-    "editorWidget.border": THEME.ash,
-    "editorGutter.background": THEME.void,
-    "scrollbarSlider.background": "#2b0d0588",
-    "editorError.foreground": THEME.redshift,
-    "editorWarning.foreground": THEME.ember,
-    "editorIndentGuide.background1": "#1e0804",
-  },
-});
+// One Monaco theme name ("blackhole") redefined from the active app theme; setTheme repaints
+// every editor. Fonts and density follow the theme too (renderer/theme.ts).
+function defineTheme(t: Theme): void {
+  monaco.editor.defineTheme("blackhole", { base: t.light ? "vs" : "vs-dark", inherit: true, rules: t.monaco.rules, colors: t.monaco.colors });
+}
+
+function fontOptions(t: Theme): monaco.editor.IEditorOptions {
+  const d = t.metrics;
+  return { fontFamily: `"${t.fonts.mono}", Menlo, monospace`, fontSize: d.code, lineHeight: d.lh };
+}
+
+defineTheme(currentTheme());
 
 export interface Buffer {
   path: string;
@@ -69,14 +50,13 @@ export interface EditorView {
   buffer: Buffer | null;
   states: Map<string, monaco.editor.ICodeEditorViewState | null>;
   ghostZone: string | null;
+  /** Dimmed-line decorations for focus themes. */
+  focus: monaco.editor.IEditorDecorationsCollection;
 }
 
 const EDITOR_OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = {
   theme: "blackhole",
   automaticLayout: true,
-  fontFamily: "JetBrains Mono, Menlo, monospace",
-  fontSize: 13,
-  lineHeight: 21,
   minimap: { enabled: false },
   scrollBeyondLastLine: false,
   renderLineHighlight: "line",
@@ -129,6 +109,29 @@ export class EditorManager {
       renderGhost: (file, at, text) => this.renderGhost(file, at, text),
       changed: (file) => this.listeners.hunks.forEach((cb) => cb(file)),
     });
+    onTheme((t) => this.restyle(t));
+    void fontsReady(currentTheme()).then(() => monaco.editor.remeasureFonts());
+  }
+
+  /** Repaint every editor for a new theme: colours now, glyph metrics once its fonts are in. */
+  restyle(t: Theme): void {
+    defineTheme(t);
+    monaco.editor.setTheme("blackhole");
+    const opts = fontOptions(t);
+    this.views.forEach((v) => {
+      v.editor.updateOptions(opts);
+      this.refocus(v);
+    });
+    void fontsReady(t).then(() => monaco.editor.remeasureFonts());
+  }
+
+  /** Focus themes dim every line more than three away from the cursor ("bh-dim", styled by the theme). */
+  private refocus(v: EditorView): void {
+    const m = v.editor.getModel(), at = v.editor.getPosition();
+    if (!currentTheme().focus || !m || !at) return v.focus.clear();
+    const last = m.getLineCount(), lo = at.lineNumber - 3, hi = at.lineNumber + 3;
+    const dim = (a: number, b: number) => ({ range: new monaco.Range(a, 1, b, m.getLineMaxColumn(b)), options: { inlineClassName: "bh-dim" } });
+    v.focus.set([...(lo > 1 ? [dim(1, lo - 1)] : []), ...(hi < last ? [dim(hi + 1, last)] : [])]);
   }
 
   /** The focused group's editor (the one commands and the anatomy "Insert path" act on). */
@@ -137,12 +140,17 @@ export class EditorManager {
   }
 
   createView(host: HTMLElement): EditorView {
-    const editor = monaco.editor.create(host, EDITOR_OPTIONS);
-    const v: EditorView = { id: nextViewId++, editor, buffer: null, states: new Map(), ghostZone: null };
+    const editor = monaco.editor.create(host, { ...EDITOR_OPTIONS, ...fontOptions(currentTheme()) });
+    const v: EditorView = { id: nextViewId++, editor, buffer: null, states: new Map(), ghostZone: null, focus: editor.createDecorationsCollection() };
     this.views.push(v);
     if (!this.activeView) this.activeView = v;
     editor.onDidFocusEditorWidget(() => this.setActiveView(v));
-    editor.onDidChangeCursorPosition(() => this.listeners.cursor.forEach((cb) => cb(v)));
+    editor.onDidChangeCursorPosition(() => {
+      this.refocus(v);
+      this.listeners.cursor.forEach((cb) => cb(v));
+    });
+    editor.onDidChangeModelContent(() => this.refocus(v));
+    editor.onDidChangeModel(() => this.refocus(v));
     bindTabAutofill(editor, this.completion);
     return v;
   }

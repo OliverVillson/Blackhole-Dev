@@ -16,7 +16,13 @@ ipcRenderer.on("bh:event", (_e, channel: string, payload: unknown) => {
 });
 
 contextBridge.exposeInMainWorld("bh", {
-  invoke: (channel: string, ...args: unknown[]) => ipcRenderer.invoke("bh:invoke", channel, ...args),
+  // Electron wraps a handler's error as "Error invoking remote method 'bh:invoke': Error: <msg>";
+  // every panel shows only <msg>.
+  invoke: (channel: string, ...args: unknown[]) =>
+    ipcRenderer.invoke("bh:invoke", channel, ...args).catch((e: unknown) => {
+      const msg = String((e as Error)?.message ?? e).replace(/^(?:Error: )?Error invoking remote method '[^']*':\s*/, "").replace(/^(?:[A-Za-z]*Error: )+/, "");
+      throw new Error(msg || "failed with no message");
+    }),
   on: (channel: string, cb: Cb) => {
     if (!listeners.has(channel)) listeners.set(channel, new Set());
     listeners.get(channel)!.add(cb);

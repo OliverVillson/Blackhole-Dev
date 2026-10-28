@@ -583,6 +583,19 @@ export class CopilotSession {
         const out = await this.host.invoke(channel, name === "job_status" && !input.name ? input.hostId : input);
         return { content: JSON.stringify(out ?? null), summary: name === "list_machines" ? "listed your machines" : `checked jobs on ${input.hostId}` };
       }
+      case "list_analyses":
+      case "list_models": {
+        const out = await this.host.invoke(MODULE_CHANNELS[name], {});
+        const n = name === "list_analyses" ? (out as { analyses?: unknown[] })?.analyses?.length : (out as { models?: unknown[] })?.models?.length;
+        return { content: clip(JSON.stringify(out ?? null)), summary: `${n ?? 0} ${name === "list_analyses" ? "analyses" : "models"}` };
+      }
+      case "run_analysis": {
+        const out = (await this.host.invoke(MODULE_CHANNELS[name], { ...input, requestedBy: "copilot" })) as
+          { ok: boolean; report?: unknown; error?: string; cancelled?: boolean } | undefined;
+        if (out?.cancelled) return { content: `The user declined the read ${input.name} needs. Do not ask again unless they bring it up.`, summary: `${input.name} declined` };
+        if (!out?.ok) throw new Error(out?.error || `${input.name} failed`);
+        return { content: clip(JSON.stringify(out.report ?? null)), summary: `ran ${input.name}` };
+      }
       default: {
         const method = HELPER_METHODS[name];
         if (!method) throw new Error(`No handler for ${name}`);
@@ -602,6 +615,11 @@ export class CopilotSession {
       }
     }
   }
+}
+
+/** Tool results go back into the model's context; a report with chart data can be large. */
+function clip(text: string, max = 24_000): string {
+  return text.length <= max ? text : `${text.slice(0, max)}… [${text.length - max} more characters cut]`;
 }
 
 /** Errors from the helper arrive wrapped by Electron's IPC ("Error invoking remote method

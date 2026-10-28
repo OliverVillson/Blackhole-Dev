@@ -338,3 +338,14 @@ def test_helper_speaks_json_rpc(tmp_path, model):
     assert any(f["name"] == "reap-prune" for f in res[11]["result"])
     assert res[12]["error"]["code"] == -32601 and res[13]["result"] == {}
     assert any(m.get("method") == "progress" and m["params"]["requestId"] == 5 for m in out)
+
+
+def test_lint_takes_a_functions_file_as_clean_and_still_flags_a_file_with_neither(tmp_path):
+    from blackhole_dev.recipe.lint import lint
+    f = tmp_path / "my_quant.py"
+    f.write_text('from blackhole_dev import function\n\n\n@function("my-quant-x", per="model")\n'
+                 'def my_quant_x(m, bits: int = 4):\n    return m\n')
+    assert lint(f) == (None, [])
+    g = tmp_path / "nothing.py"
+    g.write_text("x = 1\n")
+    assert [p["code"] for p in lint(g)[1]] == ["recipe.none"]

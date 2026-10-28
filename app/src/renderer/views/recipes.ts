@@ -3,7 +3,7 @@
 // the list background for the top level) to move it. Right click a recipe for its actions;
 // modules add actions with registerRecipeAction.
 
-import { h, clear, basename, dirname } from "../dom";
+import { h, clear, basename, dirname, FILE_DRAG } from "../dom";
 import { bh, helper } from "../bridge";
 import { contextMenu, prompt, toast, type MenuItem } from "../ui";
 import { prettyKeys } from "../keys";
@@ -104,14 +104,24 @@ export function recipesView(shell: Shell): (el: HTMLElement) => void {
         moved(from, val(dirOf));
       });
     };
-    const draggable = (row: HTMLElement, root: string, path: string) => {
+    const draggable = (row: HTMLElement, root: string, path: string, file = true) => {
       row.draggable = true;
       row.addEventListener("dragstart", (e) => {
         dragging = { path, root };
         e.dataTransfer!.effectAllowed = "move";
         e.dataTransfer!.setData("text/plain", path);
+        if (file) {
+          e.dataTransfer!.setData(FILE_DRAG, path);
+          e.dataTransfer!.effectAllowed = "copyMove";
+          // the editors' drop zones show for any drag that can land there, tab or file
+          requestAnimationFrame(() => document.body.classList.add("tab-drag"));
+        }
       });
-      row.addEventListener("dragend", () => { dragging = null; document.querySelectorAll(".drop").forEach((x) => x.classList.remove("drop")); });
+      row.addEventListener("dragend", () => {
+        dragging = null;
+        document.body.classList.remove("tab-drag");
+        document.querySelectorAll(".drop").forEach((x) => x.classList.remove("drop"));
+      });
     };
 
     /** Folders of a tree (for Move to…), as absolute paths, top level first. */
@@ -178,7 +188,7 @@ export function recipesView(shell: Shell): (el: HTMLElement) => void {
           },
         }, h("span", { class: "tw" }, open ? "▾" : "▸"), h("span", { class: "fi", html: '<svg viewBox="0 0 24 24"><path d="M3 6h6l2 2h10v11H3z"/></svg>' }),
           h("span", { class: "fname" }, e.name), h("span", { class: "meta" }, String(total)));
-        draggable(row, k.root, e.path);
+        draggable(row, k.root, e.path, false);
         const group = h("div", { class: "fgroup" }, row);
         dropTarget(group, k.root, e.path);
         if (open) {
@@ -203,7 +213,7 @@ export function recipesView(shell: Shell): (el: HTMLElement) => void {
         },
           h("div", { class: "row", style: "gap:8px;flex-wrap:nowrap" }, h("span", { class: "nm" }, r.name), shell.editor.isDirty(r.path) ? h("span", { class: "badge hot" }, "unsaved") : null),
           m ? h("div", { class: "meta" }, [m.base, m.target].filter(Boolean).join(" → ") || "no base model") : null,
-          title ? h("div", { class: "meta", style: "color:var(--text)" }, title) : null);
+          title ? h("div", { class: "meta rc-doc", style: "color:var(--text)" }, title) : null);
       },
       fileMenu: (r) => recipeItems(shell, r.path, refresh),
       newFile: (dir) => shell.executeCommand("recipe.new", dir),

@@ -13,6 +13,7 @@ import { Host } from "./host";
 import { buildMenu } from "./menu";
 import { setupUpdates } from "./updates";
 import { HELPER_METHODS } from "../shared/rpc";
+import { themeById } from "../shared/themes";
 import type { ConfirmAnswer, ConfirmShown } from "../shared/gate";
 import type { MainContext } from "../shared/ext";
 import { mainModules } from "../modules.main";
@@ -43,6 +44,9 @@ function load(w: BrowserWindow, page: "index" | "gate"): Promise<void> {
   return r.url ? w.loadURL(r.url) : w.loadFile(r.file!);
 }
 
+/** Window background before the page paints: the chosen theme's surface, so a light theme does not flash black. */
+let windowBg = themeById(null).vars.void;
+
 const gateUi: GateUi = {
   show(req: ConfirmShown): Promise<ConfirmAnswer> {
     return new Promise((resolve) => {
@@ -56,7 +60,7 @@ const gateUi: GateUi = {
         minimizable: false,
         maximizable: false,
         show: false,
-        backgroundColor: "#0c0402",
+        backgroundColor: windowBg,
         title: "Confirm",
         webPreferences: { preload: join(__dirname, "../preload/gate.js"), sandbox: true, contextIsolation: true, nodeIntegration: false },
       });
@@ -89,6 +93,7 @@ async function main(): Promise<void> {
   await app.whenReady();
   const userData = app.getPath("userData");
   const settings = new Settings(join(userData, "settings.json"));
+  windowBg = themeById(settings.get<string | null>("ui.theme", null)).vars.void;
   const paths = workspacePaths(settings.get("workspace", join(homedir(), "BlackHole-Dev")), userData);
   ensureWorkspace(paths);
   const ws = new Workspace(paths);
@@ -180,6 +185,10 @@ async function main(): Promise<void> {
     if (k === "workspace") throw new Error("use ws:chooseFolder");
     settings.set(k, v);
     if (k === "python.path") helper.restart().catch(() => undefined);
+    if (k === "ui.theme") {
+      windowBg = themeById(typeof v === "string" ? v : null).vars.void;
+      if (win && !win.isDestroyed()) win.setBackgroundColor(windowBg);
+    }
   });
   reg("gate", "gate:confirm", (req) => gate.confirm(req));
   reg("term", "term:create", (o) => terms.create(o));
@@ -210,7 +219,7 @@ async function main(): Promise<void> {
     minWidth: 960,
     minHeight: 600,
     show: false,
-    backgroundColor: "#000000",
+    backgroundColor: windowBg,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     trafficLightPosition: { x: 14, y: 12 },
     title: "BlackHole-Dev",

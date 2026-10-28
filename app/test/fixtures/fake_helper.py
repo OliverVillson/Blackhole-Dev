@@ -50,6 +50,7 @@ def lint(params):
 
 def handle(method, params):
     if method == "initialize":
+        STATE["recipesDir"] = params.get("recipesDir")
         return {"version": "0.1.0-fake", "python": sys.version.split()[0], "methods": ["recipe.lint", "recipe.plan", "recipe.steps"]}
     if method == "shutdown":
         return None
@@ -119,6 +120,21 @@ def handle(method, params):
     if method == "anatomy.get":
         q = params["query"]
         return {"path": "m." + q, "kind": "part", "rows": [["REAP rank", "0.71 · kept"], ["format", "hex3 (8-level)"], ["roles", "gate · up · down"]], "insert": f'm["{q}"]'}
+    if method == "recipe.presetFiles":
+        return {"presets": [{"id": "qwen-mac-qhex", "file": "/presets/qwen_mac_qhex.py", "group": "preset",
+                             "title": "REAP/Q-HEX Mac coder (Qwen3.6)", "description": "The headline 9.8 GB build.", "base": None},
+                            {"id": "reapq-hex-scratch", "file": "/presets/examples/reapq_hex_scratch.py", "group": "from scratch",
+                             "title": "REAP/Q-HEX from scratch", "description": "No built-in functions.", "base": None}]}
+    if method == "recipe.presets":
+        return {"presets": [{"id": "moe-prune-int4", "name": "MoE prune + int4", "summary": "catalog preset", "pipeline": True, "tags": []}]}
+    if method in ("recipe.copyPreset", "recipe.fromPreset"):
+        stem = os.path.basename(params.get("file", "")).removesuffix(".py") or params["id"].replace("-", "_")
+        d = STATE.get("recipesDir") or os.getcwd()
+        path = os.path.join(d, stem + ".py")
+        text = '"""%s"""\nfrom blackhole_dev.recipe import Recipe\n\nrecipe = Recipe("blackhole/%s", "0.1.0")\n' % (stem, stem)
+        with open(path, "w") as f:
+            f.write(text)
+        return {"path": path, "text": text}
     if method == "crash":
         os._exit(3)
     raise KeyError(method)
