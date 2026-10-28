@@ -13,9 +13,9 @@ import { HostStore } from "./hosts";
 import * as cmd from "./remote/commands";
 import { PROBE_PY, STOP_PY } from "./remote/scripts";
 import type {
-  Check, Host, JobRef, JobState, JobUpdate, LaunchOptions, LaunchPlan, Probe, PullProgress, RemoteJob, VmOffer,
+  Check, ForgetResult, Host, JobRef, JobState, JobUpdate, LaunchOptions, LaunchPlan, Probe, PullProgress, RemoteJob, VmOffer,
 } from "./shared";
-import { CH, jobKey } from "./shared";
+import { CH, CONSOLES, jobKey } from "./shared";
 import { explainSshError, type Remote, type SshTarget, type Stream } from "./ssh";
 
 export interface JobsDeps {
@@ -157,6 +157,19 @@ export class JobsService {
     this.pushHosts();
   }
 
+  /** Off the machines list, never touching the machine. Not gated: nothing is deleted or billed. */
+  async forgetHost(id: string): Promise<ForgetResult> {
+    const h = this.d.hosts.get(id);
+    const record = h.source === "blackhole-up" || h.source === "blackhole-host";
+    const message = record ? await cloud.forget(this.d.cloud, h.label, this.vmLog("vm.down")) : (this.d.hosts.forget(id), `forgot ${h.label}`);
+    for (const w of [...this.watches.values()].filter((w) => w.ref.hostId === id)) this.close(w);
+    this.homes.delete(id);
+    this.pushHosts();
+    // a VM nobody deletes keeps billing: say where to delete it
+    const consoles = h.provider ? CONSOLES.filter((c) => c.provider === h.provider) : CONSOLES;
+    return { label: h.label, message, consoles: consoles.length ? consoles : CONSOLES };
+  }
+
   async probe(hostId: string): Promise<Probe> {
     const h = this.d.hosts.get(hostId);
     if (!h.target) throw new Error(`${h.label} has no address yet (state: ${h.state ?? "unknown"})`);
@@ -233,17 +246,23 @@ export class JobsService {
 
   async vmDown(hostId: string, o: { keepDisk: boolean; force?: boolean }, requestedBy: "user" | "copilot" = "user"): Promise<{ approved: boolean } & Partial<cloud.DownResult>> {
     const h = this.d.hosts.get(hostId);
-    if (h.kind !== "vm") throw new Error(`${h.label} was not started by blackhole up; stop it in your provider's console`);
+    if (h.kind !== "vm") throw new Error(`${h.label} was not started by blackhole up; delete it in your provider's console, then Forget it here`);
+    // deleting a VM and its disk is a person's click; the copilot can only ever stop one
+    if (!o.keepDisk && requestedBy !== "user") throw new Error("only you can delete a VM: use Delete VM in Machines");
     const running = [...this.watches.values()].filter((w) => w.ref.hostId === hostId && w.state.status === "running");
     const ok = await this.d.gate.confirm({
-      action: "vm.down",
+      action: o.keepDisk ? "vm.down" : "vm.delete",
       title: o.keepDisk ? `Stop ${h.label}` : `Delete ${h.label}`,
       why: o.keepDisk
         ? "Stops the VM. Its disk and the models on it stay (and the disk stays billed)."
         : o.force
           ? "Deletes the VM and its disk, including models that were not copied off. This cannot be undone."
           : "Deletes the VM and its disk. If models are still on it, the harness refuses and lists them first.",
-      details: running.length ? [{ label: "Running jobs", value: running.map((w) => w.ref.name).join(", ") }] : [],
+      estCost: !o.keepDisk && h.ratePerHour != null ? `stops ${h.currency ?? "$"}${h.ratePerHour.toFixed(2)}/h` : undefined,
+      details: [
+        { label: "Machine", value: [h.provider, h.gpu?.toUpperCase(), h.target].filter(Boolean).join(" · ") },
+        ...(running.length ? [{ label: "Running jobs", value: running.map((w) => w.ref.name).join(", ") }] : []),
+      ],
       requestedBy,
     });
     if (!ok) return { approved: false };

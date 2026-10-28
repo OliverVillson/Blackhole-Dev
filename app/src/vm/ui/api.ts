@@ -1,7 +1,7 @@
 // Typed calls to the vm:* handlers over the shell's generic bridge.
 import type { UpSpec } from "../cloud";
 import type {
-  Host, JobRef, JobUpdate, LaunchOptions, LaunchPlan, Probe, PullProgress, RemoteJob, VmOffer,
+  ForgetResult, Host, JobRef, JobUpdate, LaunchOptions, LaunchPlan, Probe, PullProgress, RemoteJob, VmOffer,
 } from "../shared";
 import { CH } from "../shared";
 
@@ -16,6 +16,7 @@ export function vmApi(b: Bridge) {
     addHost: (spec: string, label?: string, identityFile?: string): Promise<Host> => b.invoke(CH.hostsAdd, spec, label, identityFile),
     updateHost: (id: string, prefs: { ratePerHour?: number; currency?: string; venv?: string; label?: string }): Promise<Host> => b.invoke(CH.hostsUpdate, id, prefs),
     removeHost: (id: string): Promise<void> => b.invoke(CH.hostsRemove, id),
+    forgetHost: (id: string): Promise<ForgetResult> => b.invoke(CH.hostsForget, id),
     testHost: (id: string): Promise<{ ok: boolean; latencyMs: number; probe?: Probe; error?: string }> => b.invoke(CH.hostsTest, id),
     offer: (spec: UpSpec): Promise<VmOffer> => b.invoke(CH.vmOffer, spec),
     up: (spec: UpSpec): Promise<{ approved: boolean; name?: string }> => b.invoke(CH.vmUp, spec, "user"),

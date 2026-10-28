@@ -7,7 +7,7 @@
 .bhvm .btn { height: 32px; padding: 0 14px; border-radius: 4px; border: 1px solid var(--ash, #4a0d02); background: var(--btn,#120603); color: var(--text, #f0dccb); font: 500 13px var(--font-ui, "IBM Plex Sans", sans-serif); cursor: pointer; }
 .bhvm .btn:hover:not(:disabled) { border-color: var(--ember, #ff6a00); }
 .bhvm .btn:disabled { opacity: .45; cursor: default; }
-.bhvm .btn:focus-visible, .bhvm input:focus-visible, .bhvm .mc:focus-within { outline: 2px solid var(--flare, #ffae42); outline-offset: 1px; }
+.bhvm .btn:focus-visible, .bhvm input:not([type=radio]):not([type=checkbox]):focus-visible, .bhvm .mc:focus-within { outline: 2px solid var(--flare, #ffae42); outline-offset: 1px; }
 .bhvm .btn.pri { background: var(--ember, #ff6a00); border-color: var(--ember, #ff6a00); color:var(--on-accent,#000); font-weight: 600; }
 .bhvm .btn.dng { border-color: var(--redshift, #d7261e); color: var(--err,#ff8c5a); }
 .bhvm .btn.sm { height: 26px; padding: 0 10px; font-size: 12px; }
@@ -37,7 +37,7 @@
 .bhvm .ck.info b { color: var(--dim, #a2735b); }
 .bhvm .mc { border: 1px solid var(--line2, #2b0d05); border-radius: 6px; padding: 12px; display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
 .bhvm .mc.sel { border-color: var(--ember, #ff6a00); background: var(--tint-bg,#1a0703); }
-.bhvm .mc input[type=radio] { margin-top: 3px; }
+.bhvm .mc input[type=radio] { margin-top: 3px; outline: none; }
 .bhvm .mc .t { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .bhvm .mc b { color: var(--photon, #f5efe6); font-weight: 600; }
 .bhvm .mc span { font-size: 12px; color: var(--dim, #a2735b); overflow-wrap: anywhere; }
@@ -95,3 +95,19 @@
 .bhvm .job b { font-family: var(--font-mono, monospace); font-size: 12px; font-weight: 400; color: var(--photon, #f5efe6); overflow-wrap: anywhere; }
 .bhvm .job span { font-size: 11px; color: var(--dim, #a2735b); }
 .bhvm .job .run { color: var(--flare, #ffae42); }
+
+/* per-machine actions (HostMenu.tsx): the row's ×, the right-click menu, the Forget confirmation */
+.bhvm .host > .hrow { display: flex; align-items: flex-start; gap: 6px; }
+.bhvm .host > .hrow > button:first-child { all: unset; cursor: pointer; display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.bhvm .host > .hrow > button:first-child:focus-visible { outline: 2px solid var(--flare, #ffae42); }
+.bhvm .x { all: unset; cursor: pointer; width: 20px; height: 20px; line-height: 20px; text-align: center; border-radius: 4px; font-size: 15px; color: var(--dim, #a2735b); opacity: 0; flex: none; }
+.bhvm .host:hover .x, .bhvm .mc:hover .x, .bhvm .x:focus-visible { opacity: 1; }
+.bhvm .x:hover { color: var(--err, #ff8c5a); background: var(--tint-bg, #1a0703); }
+.bhvm .x:focus-visible { outline: 2px solid var(--flare, #ffae42); }
+.bhvm .forget { gap: 6px; padding: 8px 10px; border: 1px solid var(--line2, #2b0d05); border-radius: 6px; font-size: 12px; color: var(--text, #f0dccb); }
+.bhvm .forget b { font-family: var(--font-mono, monospace); font-weight: 400; color: var(--photon, #f5efe6); }
+.bhvm .forget a { color: var(--flare, #ffae42); }
+.bhvm-menu { position: fixed; z-index: 1000; min-width: 170px; padding: 4px; display: flex; flex-direction: column; background: var(--panel, #0c0402); border: 1px solid var(--ash, #4a0d02); border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, .45); }
+.bhvm-menu button { all: unset; cursor: pointer; padding: 6px 10px; border-radius: 4px; font: 13px var(--font-ui, "IBM Plex Sans", sans-serif); color: var(--text, #f0dccb); }
+.bhvm-menu button:hover, .bhvm-menu button:focus-visible { background: var(--sel, #2a0c04); }
+.bhvm-menu button.dng { color: var(--err, #ff8c5a); }

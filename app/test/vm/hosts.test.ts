@@ -55,6 +55,16 @@ describe("machines from blackhole up", () => {
     const [h] = machineHosts({ BLACKHOLE_HOME: join(home, "bh") }, home);
     expect(h).toMatchObject({ id: "vm:bh-b300-ab12", kind: "vm", target: "ubuntu@198.51.100.4", ratePerHour: 8.5, state: "running", gpu: "b300" });
   });
+  it("lists a `blackhole up --host` record as a plain host the app can only forget", () => {
+    const home = mkdtempSync(join(tmpdir(), "bhd-"));
+    mkdirSync(join(home, "bh", "machines"), { recursive: true });
+    writeFileSync(join(home, "bh", "machines", "ubuntu-198-51-100-9.json"), JSON.stringify({
+      name: "ubuntu-198-51-100-9", provider: "nebius", gpu: "", size: "", region: "", login: "ubuntu",
+      created: 1, address: "198.51.100.9", id: null, resources: [], state: "running", usd_per_hour: null, managed: false, port: 2222,
+    }));
+    const [h] = machineHosts({ BLACKHOLE_HOME: join(home, "bh") }, home);
+    expect(h).toMatchObject({ kind: "ssh", source: "blackhole-host", target: "ubuntu@198.51.100.9", port: 2222, provider: "nebius" });
+  });
 });
 
 describe("HostStore", () => {

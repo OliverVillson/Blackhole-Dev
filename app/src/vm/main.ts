@@ -77,6 +77,7 @@ export async function activate(ctx: VmMainContext): Promise<{ deactivate(): void
   ctx.handle(CH.hostsUpdate, (id: string, prefs: object) => jobs.updateHost(id, prefs));
   ctx.handle(CH.hostsRemove, (id: string) => jobs.removeHost(id));
   ctx.handle(CH.hostsTest, (id: string) => jobs.testHost(id));
+  ctx.handle(CH.hostsForget, (id: string) => jobs.forgetHost(id));
 
   ctx.handle(CH.vmOffer, (spec) => jobs.offer(spec));
   ctx.handle(CH.vmUp, (spec, requestedBy?: "user" | "copilot") => jobs.vmUp(spec, requestedBy));

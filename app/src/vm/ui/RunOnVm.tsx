@@ -2,8 +2,9 @@
 // at the user's own rate, then one click that still passes the shell's confirm gate in main.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Check, Host, JobRef, LaunchPlan } from "../shared";
+import type { Check, ForgetResult, Host, JobRef, LaunchPlan } from "../shared";
 import type { VmApi } from "./api";
+import { ForgetConfirm, ForgetDone, ForgetX, HostMenu, hostMenuItems } from "./HostMenu";
 
 const MARK: Record<Check["tone"], string> = { ok: "✓", warn: "!", bad: "✕", info: "i" };
 
@@ -43,6 +44,16 @@ export function RunOnVm(props: { api: VmApi; recipe: string; close(): void; onLa
   const [adding, setAdding] = useState("");
   const [newVm, setNewVm] = useState<{ open: boolean; provider: string; gpu: string; spot: boolean; offer?: string }>({ open: false, provider: "nebius", gpu: "b300", spot: false });
   const [rate, setRate] = useState("");
+  const [menu, setMenu] = useState<{ host: Host; x: number; y: number } | null>(null);
+  const [forgetting, setForgetting] = useState<string | null>(null);
+  const [forgot, setForgot] = useState<(ForgetResult & { hidden: boolean }) | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
+  const down = (h: Host, o: { keepDisk: boolean; resume?: boolean }) => {
+    setError(null);
+    api.down(h.id, o).then((r) => {
+      if (r.approved && r.done === false) setError(`${h.label} still has models that deleting would lose: ${(r.blockedBy ?? []).join(", ")}. Copy them off first, or delete it from Machines.`);
+    }, (e: Error) => setError(e.message));
+  };
 
   const refreshHosts = useCallback(async (select?: string) => {
     const hs = await api.hosts();
@@ -195,11 +206,27 @@ export function RunOnVm(props: { api: VmApi; recipe: string; close(): void; onLa
         <div className="col">
           <div className="hd">Machine</div>
           {hosts.map((h) => (
-            <label key={h.id} className={`mc ${h.id === hostId ? "sel" : ""}`}>
-              <input type="radio" name="bhvm-host" checked={h.id === hostId} disabled={!h.target || h.state === "stopped"} onChange={() => { rememberHost(h.id); setHostId(h.id); }} />
-              <div className="t"><b>{h.label}</b><span>{hostLine(h)}</span></div>
-            </label>
+            <div key={h.id} className="col" style={{ gap: 4 }}>
+              <label className={`mc ${h.id === hostId ? "sel" : ""}`} onContextMenu={(e) => { e.preventDefault(); setMenu({ host: h, x: e.clientX, y: e.clientY }); }}>
+                <input type="radio" name="bhvm-host" checked={h.id === hostId} disabled={!h.target || h.state === "stopped"} onChange={() => { rememberHost(h.id); setHostId(h.id); }} />
+                <div className="t"><b>{h.label}</b><span>{hostLine(h)}</span></div>
+                <ForgetX host={h} onClick={() => setForgetting(h.id)} />
+              </label>
+              {forgetting === h.id && (
+                <ForgetConfirm api={api} host={h} close={() => setForgetting(null)} del={() => down(h, { keepDisk: false })}
+                  done={(r) => { setForgetting(null); setForgot(r); if (hostId === h.id) setHostId(null); void refreshHosts(); }} />
+              )}
+            </div>
           ))}
+          {forgot && <ForgetDone result={forgot} close={() => setForgot(null)} />}
+          {menu && (
+            <HostMenu x={menu.x} y={menu.y} close={closeMenu} items={hostMenuItems(menu.host, {
+              stop: () => down(menu.host, { keepDisk: true }),
+              start: () => down(menu.host, { keepDisk: false, resume: true }),
+              del: () => down(menu.host, { keepDisk: false }),
+              forget: () => setForgetting(menu.host.id),
+            })} />
+          )}
           {!hosts.length && <div className="dim">No machines yet. Add one you already run, or start a cloud VM.</div>}
           <div className="mc" style={{ cursor: "default" }}>
             <div className="t">

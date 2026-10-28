@@ -1,9 +1,12 @@
 // The Machines sidebar view: every host, what its GPU and disk are doing, its jobs, and for VMs
-// made by `blackhole up` the stop / start / delete buttons (each behind the confirm gate).
+// made by `blackhole up` the stop / start / delete buttons (each behind the confirm gate). Right-click
+// a machine, or its ×, to forget it.
 
 import { useCallback, useEffect, useState } from "react";
 import type { Host, Probe, RemoteJob } from "../shared";
 import type { VmApi } from "./api";
+import { type DownResult, ForgetConfirm, ForgetDone, ForgetX, HostMenu, hostMenuItems } from "./HostMenu";
+import type { ForgetResult } from "../shared";
 import { hostLine } from "./RunOnVm";
 
 function ago(ts?: number): string {
@@ -33,12 +36,16 @@ function Meter({ label, value, max, unit, color }: { label: string; value: numbe
   );
 }
 
-function HostCard(props: { api: VmApi; host: Host; open: boolean; toggle(): void; openJob(h: Host, j: RemoteJob): void; openTerminal(h: Host): void }) {
+type Forgot = ForgetResult & { hidden: boolean };
+
+function HostCard(props: { api: VmApi; host: Host; open: boolean; toggle(): void; forgot(r: Forgot): void; openJob(h: Host, j: RemoteJob): void; openTerminal(h: Host): void }) {
   const { api, host: h } = props;
   const [probe, setProbe] = useState<Probe | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [blocked, setBlocked] = useState<string[] | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [forgetting, setForgetting] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!h.target) return;
@@ -54,7 +61,7 @@ function HostCard(props: { api: VmApi; host: Host; open: boolean; toggle(): void
     return () => clearInterval(t);
   }, [props.open, refresh]);
 
-  const act = async (f: () => Promise<{ approved: boolean; done?: boolean; blockedBy?: string[]; message?: string }>) => {
+  const act = async (f: () => Promise<DownResult>) => {
     setBusy(true);
     setErr(null);
     try {
@@ -67,14 +74,24 @@ function HostCard(props: { api: VmApi; host: Host; open: boolean; toggle(): void
     }
   };
 
+  const stop = () => act(() => api.down(h.id, { keepDisk: true }));
+  const start = () => act(() => api.down(h.id, { keepDisk: false, resume: true }));
+  const del = () => act(() => api.down(h.id, { keepDisk: false }));
+  const closeMenu = useCallback(() => setMenu(null), []);
+
   const gpu = probe?.gpus[0];
   const status = err ? "bad" : probe ? "ok" : "";
   return (
-    <div className={`host ${props.open ? "open" : ""}`}>
-      <button onClick={props.toggle} aria-expanded={props.open}>
-        <b><span className={`dot ${status}`} aria-hidden="true" />{h.label}</b>
-        <span>{hostLine(h)}</span>
-      </button>
+    <div className={`host ${props.open ? "open" : ""}`} onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}>
+      <div className="hrow">
+        <button onClick={props.toggle} aria-expanded={props.open}>
+          <b><span className={`dot ${status}`} aria-hidden="true" />{h.label}</b>
+          <span>{hostLine(h)}</span>
+        </button>
+        <ForgetX host={h} onClick={() => setForgetting(true)} />
+      </div>
+      {menu && <HostMenu x={menu.x} y={menu.y} close={closeMenu} items={hostMenuItems(h, { stop, start, del, forget: () => setForgetting(true) })} />}
+      {forgetting && <ForgetConfirm api={api} host={h} close={() => setForgetting(false)} done={props.forgot} del={del} />}
       {props.open && (
         <>
           {err && <span className="err" role="alert">{err}</span>}
@@ -96,10 +113,9 @@ function HostCard(props: { api: VmApi; host: Host; open: boolean; toggle(): void
           <div className="row" style={{ marginTop: 4 }}>
             <button className="btn sm" onClick={refresh} disabled={!h.target}>Refresh</button>
             <button className="btn sm" onClick={() => props.openTerminal(h)} disabled={!h.target}>TUI</button>
-            {h.kind === "vm" && h.state === "running" && <button className="btn sm" disabled={busy} onClick={() => act(() => api.down(h.id, { keepDisk: true }))}>Stop VM</button>}
-            {h.kind === "vm" && h.state === "stopped" && <button className="btn sm" disabled={busy} onClick={() => act(() => api.down(h.id, { keepDisk: false, resume: true }))}>Start VM</button>}
-            {h.kind === "vm" && <button className="btn sm dng" disabled={busy} onClick={() => act(() => api.down(h.id, { keepDisk: false }))}>Delete…</button>}
-            {h.source === "app" && <button className="btn sm" onClick={() => api.removeHost(h.id)}>Remove</button>}
+            {h.kind === "vm" && h.state === "running" && <button className="btn sm" disabled={busy} onClick={stop}>Stop VM</button>}
+            {h.kind === "vm" && h.state === "stopped" && <button className="btn sm" disabled={busy} onClick={start}>Start VM</button>}
+            {h.kind === "vm" && <button className="btn sm dng" disabled={busy} onClick={del}>Delete VM…</button>}
           </div>
           {blocked && (
             <div className="col" style={{ gap: 4 }}>
@@ -124,6 +140,7 @@ export function Machines(props: { api: VmApi; openJob(h: Host, j: RemoteJob): vo
   const [open, setOpen] = useState<string | null>(null);
   const [adding, setAdding] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [forgot, setForgot] = useState<Forgot | null>(null);
 
   useEffect(() => {
     api.hosts().then((hs) => {
@@ -149,8 +166,9 @@ export function Machines(props: { api: VmApi; openJob(h: Host, j: RemoteJob): vo
     <div className="bhvm side">
       <div className="hd" style={{ padding: "0 4px 6px" }}>Machines</div>
       {hosts.map((h) => (
-        <HostCard key={h.id} api={api} host={h} open={open === h.id} toggle={() => setOpen(open === h.id ? null : h.id)} openJob={props.openJob} openTerminal={props.openTerminal} />
+        <HostCard key={h.id} api={api} host={h} open={open === h.id} toggle={() => setOpen(open === h.id ? null : h.id)} forgot={setForgot} openJob={props.openJob} openTerminal={props.openTerminal} />
       ))}
+      {forgot && <ForgetDone result={forgot} close={() => setForgot(null)} />}
       {!hosts.length && <span className="dim" style={{ padding: "0 4px" }}>Hosts from ~/.ssh/config and VMs from blackhole up show here.</span>}
       <div className="col" style={{ padding: "10px 4px", gap: 6 }}>
         <label htmlFor="bhvm-side-add" className="hd">Add SSH host</label>

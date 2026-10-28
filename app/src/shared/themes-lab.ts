@@ -67,7 +67,7 @@ export const LAB: Spec[] = [
     mark: ["#1d55ad", "#6f93cc", "#bfe0ff", "#ffffff", "#ffffff"], ring: "#ffd84a",
     fonts: { display: "Architects Daughter", ui: "Barlow", mono: "Overpass Mono" }, kwBold: true,
     fx: `& .monaco-editor .monaco-editor-background, & .sidebar, & .right, & .panel { background-image: ${GRID}; background-size: 40px 40px, 40px 40px, 8px 8px, 8px 8px; }
-      & .btn, & input, & .chip, & .card, & textarea, & .search button { border-style: dashed; border-radius: 0; }
+      & .btn, & input:not([type=radio]):not([type=checkbox]), & .chip, & .card, & textarea, & .search button { border-style: dashed; border-radius: 0; }
       & .brand b { font-weight: 400; letter-spacing: .06em; } & .hd { font-size: 13px; letter-spacing: .06em; }
       & .tab.on { box-shadow: inset 0 2px 0 #ffd84a; }
       & .monaco-editor .view-overlays .current-line { outline: 1px dashed rgba(255,216,74,.7); outline-offset: -1px; }`,
@@ -85,7 +85,7 @@ export const LAB: Spec[] = [
     vars: { "status-bg": "#111111", "status-fg": "#f2f2ef", "status-line": "#111111" },
     fonts: { display: "Archivo Black", ui: "Archivo", mono: "DM Mono" }, density: "regular", kwBold: true,
     fx: `& .titlebar, & .tabs, & .panel, & .sidebar, & .right, & .activity, & .status, & .crumbs, & .right-tabs { border-width: 2px; border-color: #111; }
-      & .btn, & .chip, & input, & .card, & textarea, & .search button { border: 2px solid #111; box-shadow: 3px 3px 0 #111; border-radius: 0; }
+      & .btn, & .chip, & input:not([type=radio]):not([type=checkbox]), & .card, & textarea, & .search button { border: 2px solid #111; box-shadow: 3px 3px 0 #111; border-radius: 0; }
       & .tab { font-weight: 600; text-transform: uppercase; font-size: 12px; letter-spacing: .04em; }
       & .tab.on { box-shadow: inset 0 -4px 0 #ffe600; background: #fff; }
       & .hd { color: #111; letter-spacing: .06em; } & .brand b { font-weight: 400; } & .brand b span { color: #ff3d00; }
@@ -177,7 +177,7 @@ export const LAB: Spec[] = [
     vars: { "status-bg": "#0f380f", "status-fg": "#9bbc0f", "status-line": "#0f380f", hover: "#8bac0f", "tint-bg": "#8bac0f", "line2": "#306230" },
     fonts: { display: "Silkscreen", ui: "DotGothic16", mono: "VT323" }, metrics: { ui: 13, code: 17, lh: 19, row: 24 }, kwBold: true,
     fx: `& .dot:not(.ok):not(.live) { background: transparent; box-shadow: inset 0 0 0 2px #0f380f; }
-      & .btn, & .chip, & input, & .card, & textarea, & .search button { border-width: 2px; border-radius: 0; }
+      & .btn, & .chip, & input:not([type=radio]):not([type=checkbox]), & .card, & textarea, & .search button { border-width: 2px; border-radius: 0; }
       & .hd { letter-spacing: .04em; font-size: 10px; } & .tab.on { box-shadow: inset 0 3px 0 #0f380f; }
       ${SEL_TEXT("#9bbc0f")}
       & .brand svg circle[r="3.72"] { fill: #0f380f; }
@@ -267,7 +267,7 @@ export const LAB: Spec[] = [
       & .center { background: rgba(255,255,255,.66); }
       & .monaco-editor, & .monaco-editor .monaco-editor-background, & .monaco-editor .margin, & .monaco-editor .sticky-widget { background: transparent !important; }
       & .tab.on { background: rgba(255,255,255,.92); }
-      & .btn, & .chip, & .card, & input, & textarea, & .search button { border-radius: 8px; }
+      & .btn, & .chip, & .card, & input:not([type=radio]):not([type=checkbox]), & textarea, & .search button { border-radius: 8px; }
       & .card { background: rgba(255,255,255,.7); box-shadow: 0 6px 18px rgba(26,124,255,.10); }
       & .btn.pri { box-shadow: 0 4px 12px rgba(26,124,255,.35); }`,
   },
@@ -285,7 +285,7 @@ export const LAB: Spec[] = [
     fonts: { display: "Atkinson Hyperlegible", ui: "Atkinson Hyperlegible", mono: "Atkinson Hyperlegible Mono" }, density: "roomy", metrics: { code: 14 }, kwBold: true,
     fx: `${SEL_TEXT("#000")} ${SEL_ROWS} { font-weight: 700; }
       & .group.active { outline: 2px solid #ffff00; outline-offset: -2px; }
-      & .btn, & .chip, & input, & .card, & textarea, & .search button { border-width: 2px; border-color: #fff; }
+      & .btn, & .chip, & input:not([type=radio]):not([type=checkbox]), & .card, & textarea, & .search button { border-width: 2px; border-color: #fff; }
       & .btn.pri { border-color: #ffff00; }
       & .tab.on { box-shadow: inset 0 3px 0 #ffff00; text-decoration: underline; text-underline-offset: 4px; }
       & .ab.on { color: #000; background: #ffff00; box-shadow: none; }`,
