@@ -215,12 +215,16 @@ def plan(r: Recipe, device: str | None = "mac16", model: str | None = None, inpu
                  for st in r.steps}
     dev = _device_args(device)
     m = None
+    gated = None
     if model:
         try:
             m = anatomy.open(model)
         except Exception as e:  # noqa: BLE001
-            problems.append({"severity": "warning", "message": f"cannot open {model} to plan sizes: {e}",
+            problems.append({"severity": "warning", "message": _open_problem(model, e),
                              "line": r.line, "code": "plan.no-model"})
+        if m is not None and m.root is None:
+            from blackhole_dev.model import hub_gated
+            gated = hub_gated(str(model))
     else:
         problems.append({"severity": "warning", "message": "no base model: set base= on the Recipe or pick a model",
                          "line": r.line, "code": "plan.no-model"})
@@ -261,4 +265,18 @@ def plan(r: Recipe, device: str | None = "mac16", model: str | None = None, inpu
     return {"rows": rows, "sizeGb": round(after.total_gb, 6) if after else None,
             "fits": after.fits if after else None, "kvGb": round(after.kv_gb, 6) if after else None,
             "estHours": hours, "problems": problems, "steps": steps, "needs": needs,
-            "device": device, "model": model}
+            "device": device, "model": model, "gated": gated,
+            "baseGb": round(before.total_gb, 6) if before else None}
+
+
+def _open_problem(model: str, e: Exception) -> str:
+    """Why the base model could not be read, in words a person can act on."""
+    name = type(e).__name__
+    if name in ("GatedRepoError",) or "401" in str(e) or "403" in str(e):
+        return f"{model} is gated on Hugging Face: accept its licence there and log in (hf auth login) to plan it"
+    if name in ("RepositoryNotFoundError",) or "404" in str(e):
+        return f"{model} is not on Hugging Face (check the name, or point base= at a local folder)"
+    if name in ("HubUnreachable", "ConnectError", "ConnectTimeout", "ReadTimeout", "LocalEntryNotFoundError",
+                "OfflineModeIsEnabled") or "timed out" in str(e).lower():
+        return f"cannot reach huggingface.co to read {model}'s headers ({e}); sizes and time are unknown"
+    return f"cannot open {model} to plan sizes: {e}"

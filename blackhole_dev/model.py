@@ -15,6 +15,7 @@ import hashlib
 import json
 import re
 import shutil
+import struct
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -992,17 +993,113 @@ def open(model: str | Path, revision: str | None = None, token: str | None = Non
         local = snapshot_download(rid, revision=revision, token=token,
                                   allow_patterns=["*.json", "*.safetensors", "*.model", "*.txt", "*.py", "*.jinja", "*.tiktoken"])
         return _open_dir(Path(local), rid)
+    cfg, blobs = hub_headers(rid, revision, token)
+    ents = []
+    for b in blobs:
+        ents += st.entries(b)
+    return Model(rid, None, cfg, ents)
+
+
+HUB_DEADLINE_S = 30.0      # all of a Hub model's headers; a plan should take seconds, not minutes
+HUB_FAIL_TTL_S = 60.0      # a failure is remembered this long, so the next caller fails at once
+HEAD_PROBE = 256 * 1024    # first range read per shard; most headers fit, the rest is read once more
+_hub_cache: dict[tuple, tuple] = {}
+_hub_fail: dict[tuple, tuple[float, Exception]] = {}
+
+
+class HubUnreachable(RuntimeError):
+    """The Hub did not answer in time, or not at all."""
+
+
+def hub_headers(rid: str, revision: str | None = None, token: str | None = None,
+                deadline_s: float = HUB_DEADLINE_S) -> tuple[dict, list]:
+    """config.json and every safetensors shard's header of a Hub model, read in parallel with
+    range requests and kept for the process (the helper plans the same base model again and
+    again). Raises HubUnreachable past `deadline_s`; a failure is remembered for a minute."""
+    key = (rid, revision, bool(token))
+    if key in _hub_cache:
+        cfg, heads = _hub_cache[key]
+        blobs = []
+        for url, hdr, base, h in heads:
+            b = st.Blob(url, h)
+            b._header = (hdr, base)
+            blobs.append(b)
+        return cfg, blobs
+    failed = _hub_fail.get(key)
+    if failed and time.monotonic() - failed[0] < HUB_FAIL_TTL_S:
+        raise failed[1]
+    try:
+        cfg, heads = _read_hub_headers(rid, revision, token, deadline_s)
+    except Exception as e:  # noqa: BLE001  remembered, then raised as is
+        _hub_fail[key] = (time.monotonic(), e)
+        raise
+    _hub_cache[key] = (cfg, heads)
+    _hub_fail.pop(key, None)
+    return hub_headers(rid, revision, token)
+
+
+def _read_hub_headers(rid, revision, token, deadline_s):
+    from concurrent.futures import ThreadPoolExecutor, wait
+
+    import httpx
     from huggingface_hub import HfApi, hf_hub_download, hf_hub_url
     from huggingface_hub.utils import build_hf_headers
-    cfg = json.loads(Path(hf_hub_download(rid, "config.json", revision=revision, token=token)).read_text())
-    files = [f for f in HfApi().list_repo_files(rid, revision=revision, token=token) if f.endswith(".safetensors")]
-    if not files:
-        raise FileNotFoundError(f"{rid} has no safetensors files")
-    headers = build_hf_headers(token=token)
-    ents = []
-    for f in sorted(files):
-        ents += st.entries(st.Blob(hf_hub_url(rid, f, revision=revision), headers))
-    return Model(rid, None, cfg, ents)
+
+    t0 = time.monotonic()
+    left = lambda: deadline_s - (time.monotonic() - t0)  # noqa: E731
+    pool = ThreadPoolExecutor(max_workers=8)
+    try:
+        f_cfg = pool.submit(hf_hub_download, rid, "config.json", revision=revision, token=token)
+        f_files = pool.submit(HfApi().list_repo_files, rid, revision=revision, token=token)
+        done, _ = wait([f_cfg, f_files], timeout=max(0.1, left()))
+        if len(done) < 2:
+            raise HubUnreachable(f"huggingface.co did not answer within {deadline_s:.0f}s for {rid}")
+        cfg = json.loads(Path(f_cfg.result()).read_text())
+        files = sorted(f for f in f_files.result() if f.endswith(".safetensors"))
+        if not files:
+            raise FileNotFoundError(f"{rid} has no safetensors files")
+        headers = build_hf_headers(token=token)
+        timeout = httpx.Timeout(min(20.0, deadline_s), connect=10.0)
+        with httpx.Client(headers=headers, follow_redirects=True, timeout=timeout) as client:
+            def head(f: str):
+                url = hf_hub_url(rid, f, revision=revision)
+                r = client.get(url, headers={"Range": f"bytes=0-{HEAD_PROBE - 1}"})
+                r.raise_for_status()
+                buf = r.content
+                n = struct.unpack("<Q", buf[:8])[0]
+                if len(buf) < 8 + n:
+                    r = client.get(url, headers={"Range": f"bytes={len(buf)}-{8 + n - 1}"})
+                    r.raise_for_status()
+                    buf += r.content
+                return url, json.loads(buf[8:8 + n]), 8 + n, headers
+
+            futs = [pool.submit(head, f) for f in files]
+            done, pending = wait(futs, timeout=max(0.1, left()))
+            if pending:
+                for f in pending:
+                    f.cancel()
+                raise HubUnreachable(f"reading {rid}'s {len(files)} safetensors headers from huggingface.co took "
+                                     f"over {deadline_s:.0f}s ({len(done)} of {len(files)} read)")
+            heads = [f.result() for f in futs]
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+    return cfg, heads
+
+
+def hub_gated(rid: str, token: str | None = None) -> bool | None:
+    """Whether a Hub model needs an accepted licence and a token to download; None when unknown."""
+    if rid in _gated:
+        return _gated[rid]
+    try:
+        from huggingface_hub import HfApi
+        g = HfApi().model_info(rid, token=token, timeout=10).gated
+        _gated[rid] = bool(g)
+    except Exception:  # noqa: BLE001  unknown is an answer
+        return None
+    return _gated[rid]
+
+
+_gated: dict[str, bool] = {}
 
 
 def _open_dir(root: Path, model_id: str) -> Model:

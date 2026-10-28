@@ -135,6 +135,28 @@ def gpus():
     return res
 
 
+def hf_token():
+    """Whether downloads here can use a Hugging Face token (gated models need one; public ones do not)."""
+    if os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN"):
+        return True
+    hf_home = os.environ.get("HF_HOME") or os.path.expanduser("~/.cache/huggingface")
+    try:
+        with open(os.path.join(hf_home, "token")) as f:
+            return bool(f.read().strip())
+    except OSError:
+        return False
+
+
+def models():
+    """Hub ids the pipeline already downloaded: REAPer keeps them in $REAPER_HOME/models/<org>--<name>."""
+    root = os.path.join(os.environ.get("REAPER_HOME") or os.path.expanduser("~/.reaper"), "models")
+    try:
+        names = sorted(os.listdir(root))
+    except OSError:
+        return []
+    return [n.replace("--", "/", 1) for n in names if os.path.exists(os.path.join(root, n, "config.json"))]
+
+
 venv = find_venv()
 py = os.path.join(venv, "bin", "python") if venv else None
 recipe_flag, dev = False, None
@@ -156,5 +178,7 @@ print(json.dumps({
     "diskFreeGb": round(du.free / 1e9, 1),
     "diskTotalGb": round(du.total / 1e9, 1),
     "jobs": jobs(),
+    "hfToken": hf_token(),
+    "models": models(),
     "now": time.time(),
 }))

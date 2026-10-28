@@ -187,6 +187,40 @@ def test_plan_simulates_size_effects(model):
     missing = plan(Recipe("me/m", base="/nope/model"), device="mac16")
     assert missing["sizeGb"] is None and missing["fits"] is None
     assert missing["problems"][0]["code"] == "plan.no-model"
+    assert full["gated"] is None and full["baseGb"] > 0      # a local folder: no Hub question
+
+
+def test_hub_headers_are_cached_and_failures_fail_fast(monkeypatch, model):
+    import blackhole_dev.model as M
+    from blackhole.anatomy import st
+    files = st.checkpoint_files(model)
+    heads = []
+    for f in files:
+        hdr, base = st.Blob(str(model / f)).header()
+        heads.append((str(model / f), hdr, base, {}))
+    cfg = json.loads((model / "config.json").read_text())
+    calls = []
+    monkeypatch.setattr(M, "_hub_cache", {})
+    monkeypatch.setattr(M, "_hub_fail", {})
+    monkeypatch.setattr(M, "_gated", {"me/tiny": False})
+
+    def read(rid, revision, token, deadline_s):
+        calls.append(rid)
+        if rid == "me/down":
+            raise M.HubUnreachable("huggingface.co did not answer within 30s for me/down")
+        return cfg, heads
+    monkeypatch.setattr(M, "_read_hub_headers", read)
+    a = M.open("me/tiny")
+    b = M.open("me/tiny")
+    assert calls == ["me/tiny"] and a is not b and a.root is None
+    assert len(a.plan().__dict__) and a.plan().total_gb == b.plan().total_gb
+    out = plan(Recipe("me/h", base="me/tiny"), device="mac16")
+    assert out["gated"] is False and out["sizeGb"] > 0 and calls == ["me/tiny"]
+    with pytest.raises(M.HubUnreachable):
+        M.open("me/down")
+    down = plan(Recipe("me/d", base="me/down"), device="mac16")      # remembered: no second wait
+    assert calls == ["me/tiny", "me/down"]
+    assert "cannot reach huggingface.co" in down["problems"][0]["message"] and down["sizeGb"] is None
 
 
 # --------------------------------------------------------------------------- bundles

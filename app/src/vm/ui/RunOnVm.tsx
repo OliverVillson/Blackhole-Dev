@@ -1,7 +1,7 @@
 // The Run on VM dialog (sketch board "Run on VM"): checks, machine pick, the exact commands, cost
 // at the user's own rate, then one click that still passes the shell's confirm gate in main.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Check, Host, JobRef, LaunchPlan } from "../shared";
 import type { VmApi } from "./api";
 
@@ -12,6 +12,22 @@ export function hostLine(h: Host): string {
     h.ratePerHour != null ? `${h.currency ?? "$"}${h.ratePerHour.toFixed(2)}/h` : null, h.target || "no address yet"];
   return bits.filter(Boolean).join(" · ");
 }
+
+const LAST_HOST = "bhvm.lastHost";
+const lastHost = (): string | null => {
+  try {
+    return localStorage.getItem(LAST_HOST);
+  } catch {
+    return null;
+  }
+};
+const rememberHost = (id: string) => {
+  try {
+    localStorage.setItem(LAST_HOST, id);
+  } catch {
+    /* private mode: the first usable machine is picked next time */
+  }
+};
 
 export function RunOnVm(props: { api: VmApi; recipe: string; close(): void; onLaunched(ref: JobRef): void }) {
   const { api, recipe } = props;
@@ -31,7 +47,8 @@ export function RunOnVm(props: { api: VmApi; recipe: string; close(): void; onLa
   const refreshHosts = useCallback(async (select?: string) => {
     const hs = await api.hosts();
     setHosts(hs);
-    setHostId((cur) => select ?? cur ?? hs.find((h) => h.state !== "stopped" && h.target)?.id ?? null);
+    const usable = (id: string | null) => hs.find((h) => h.id === id && h.state !== "stopped" && h.target)?.id;
+    setHostId((cur) => select ?? cur ?? usable(lastHost()) ?? hs.find((h) => h.state !== "stopped" && h.target)?.id ?? null);
   }, [api]);
 
   useEffect(() => {
@@ -40,17 +57,21 @@ export function RunOnVm(props: { api: VmApi; recipe: string; close(): void; onLa
     return () => offs.forEach((o) => o());
   }, [api, refreshHosts]);
 
+  // a check of the machine picked before can answer after the one picked now: only the latest counts
+  const seq = useRef(0);
   const check = useCallback(async () => {
     if (!hostId) return;
+    const mine = ++seq.current;
     setChecking(true);
     setError(null);
     setPlan(null);
     try {
-      setPlan(await api.prepare(recipe, hostId));
+      const p = await api.prepare(recipe, hostId);
+      if (mine === seq.current) setPlan(p);
     } catch (e) {
-      setError((e as Error).message);
+      if (mine === seq.current) setError((e as Error).message);
     } finally {
-      setChecking(false);
+      if (mine === seq.current) setChecking(false);
     }
   }, [api, hostId, recipe]);
 
@@ -59,13 +80,16 @@ export function RunOnVm(props: { api: VmApi; recipe: string; close(): void; onLa
   }, [check]);
 
   const host = hosts.find((h) => h.id === hostId);
+  // checks, the commands and Run all belong to the picked machine, never to an earlier pick
+  const current = plan && plan.host.id === hostId ? plan : null;
 
   const launch = async () => {
-    if (!plan) return;
+    if (!current) return;
     setBusy("launch");
     setError(null);
     try {
-      const ref = await api.launch(plan.id, { pullWhenDone: pull, notify });
+      rememberHost(current.host.id);
+      const ref = await api.launch(current.id, { pullWhenDone: pull, notify });
       if (ref) {
         props.onLaunched(ref);
         props.close();
@@ -124,7 +148,7 @@ export function RunOnVm(props: { api: VmApi; recipe: string; close(): void; onLa
   };
 
   // Check -> Machine -> Send -> Watch: "Send" is next once the checks pass on the picked machine
-  const step = busy === "launch" ? 2 : plan?.ok ? 2 : 0;
+  const step = busy === "launch" ? 2 : current?.ok ? 2 : 0;
   const fileName = recipe.split("/").pop();
   const steps = useMemo(() => ["Check", "Machine", "Send", "Watch"], []);
 
@@ -148,16 +172,16 @@ export function RunOnVm(props: { api: VmApi; recipe: string; close(): void; onLa
         <div className="col">
           <div className="hd">Checks</div>
           {checking && <div className="dim">checking {host?.label ?? ""}…</div>}
-          {plan?.checks.map((c, i) => (
+          {current?.checks.map((c, i) => (
             <div key={i} className={`ck ${c.tone}`}><b aria-label={c.tone}>{MARK[c.tone]}</b><span>{c.label}</span><span className="v">{c.detail}</span></div>
           ))}
-          {!checking && !plan && !error && <div className="dim">pick a machine</div>}
+          {!checking && !current && !error && <div className="dim">pick a machine</div>}
           <div style={{ height: 6 }} />
           <div className="hd">Estimate</div>
           <div style={{ lineHeight: "20px" }}>
-            {plan?.estHours != null ? `~${plan.estHours.toFixed(1)} h on ${host?.gpu ? "1× " + host.gpu.toUpperCase() : host?.label ?? "this machine"}` : "run time unknown until the plan has an estimate"}
+            {current?.estHours != null ? `~${current.estHours.toFixed(1)} h on ${host?.gpu ? "1× " + host.gpu.toUpperCase() : host?.label ?? "this machine"}` : "run time unknown until the plan has an estimate"}
             <br />
-            <span className="dim">≈ {plan?.estCost ?? "[your VM hourly rate] × run time"}. The app never starts or pays for a VM without your click.</span>
+            <span className="dim">≈ {current?.estCost ?? "[your VM hourly rate] × run time"}. The app never starts or pays for a VM without your click.</span>
           </div>
           {host && host.ratePerHour == null && host.kind === "ssh" && (
             <div className="row">
@@ -172,7 +196,7 @@ export function RunOnVm(props: { api: VmApi; recipe: string; close(): void; onLa
           <div className="hd">Machine</div>
           {hosts.map((h) => (
             <label key={h.id} className={`mc ${h.id === hostId ? "sel" : ""}`}>
-              <input type="radio" name="bhvm-host" checked={h.id === hostId} disabled={!h.target || h.state === "stopped"} onChange={() => setHostId(h.id)} />
+              <input type="radio" name="bhvm-host" checked={h.id === hostId} disabled={!h.target || h.state === "stopped"} onChange={() => { rememberHost(h.id); setHostId(h.id); }} />
               <div className="t"><b>{h.label}</b><span>{hostLine(h)}</span></div>
             </label>
           ))}
@@ -215,13 +239,13 @@ export function RunOnVm(props: { api: VmApi; recipe: string; close(): void; onLa
       <div style={{ padding: "0 22px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
         <div className="hd">What will run</div>
         <div className="preview" aria-label="Commands">
-          {(plan?.steps ?? []).map((s, i) => (
+          {(current?.steps ?? []).map((s, i) => (
             <div key={i}>
               <div className="L"><span className="c"># {i + 1}. {s.title}</span></div>
               <div className="L"><span className="p">$</span> {s.cmd}</div>
             </div>
           ))}
-          {!plan && <div className="L"><span className="c"># the commands appear once the checks have run</span></div>}
+          {!current && <div className="L"><span className="c"># the commands appear once the checks have run</span></div>}
         </div>
         <div className="row" style={{ gap: 20, marginTop: 4 }}>
           <label className="row"><input type="checkbox" checked={pull} onChange={(e) => setPull(e.target.checked)} />Copy the finished model to this Mac</label>
@@ -234,8 +258,8 @@ export function RunOnVm(props: { api: VmApi; recipe: string; close(): void; onLa
       <div className="foot">
         <button className="btn" onClick={props.close}>Cancel</button>
         <button className="btn" onClick={() => checking || check()} disabled={checking || !hostId}>Check again</button>
-        <button className="btn" onClick={() => plan && api.exportBundle(plan.bundle)} disabled={!plan?.bundle}>Export bundle only</button>
-        <button className="btn pri" onClick={launch} disabled={!plan?.ok || busy !== null}>
+        <button className="btn" onClick={() => current && api.exportBundle(current.bundle)} disabled={!current?.bundle}>Export bundle only</button>
+        <button className="btn pri" onClick={launch} disabled={!current?.ok || busy !== null}>
           {busy === "launch" ? "Starting…" : `Run on ${host?.label ?? "…"} ▸`}
         </button>
       </div>
