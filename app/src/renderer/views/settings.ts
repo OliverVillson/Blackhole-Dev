@@ -73,7 +73,7 @@ export function settingsView(shell: Shell): (el: HTMLElement) => void {
           toast("Token saved to the Keychain; the helper restarted with it");
         } }, "Save token"),
         h("button", { class: "btn sm", onclick: async () => { await bh.invoke("secrets:delete", "hf-token"); refreshHf(); await bh.invoke("helper:restart"); } }, "Remove")), hfState,
-        h("div", { class: "meta", style: "padding:0 4px" }, "Used on this Mac to read gated models such as RecursiveSI/flint (accept the licence on huggingface.co first). Without it the helper uses `hf auth login` if you ran it. A VM needs its own token: run `hf auth login` there.")),
+        h("div", { class: "meta", style: "padding:0 4px" }, "Used on this Mac to read gated or private models (accept the licence on huggingface.co first); public models such as RecursiveSI/flint do not need it. Without it the helper uses `hf auth login` if you ran it. A VM needs its own token: run `hf auth login` there.")),
       section("Keyboard shortcuts", shortcutsList(shell)),
       section("Licence", licence),
       section("Checks", checks, h("div", { class: "row" }, h("button", { class: "btn sm", onclick: () => renderChecks(checks) }, "Run checks again"))),
