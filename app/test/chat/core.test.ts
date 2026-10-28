@@ -205,12 +205,13 @@ describe('wired limit', () => {
     const calls: string[][] = [];
     return { calls, platform: 'darwin', arch: 'arm64', totalMb, exec: async (c, a) => (calls.push([c, ...a]), out) };
   };
-  it('recommends 12288 MB on a 16 GB Mac and flags a 9.8 GB model under the default', async () => {
+  it('fits a 9.8 GB model under the 16 GB default and flags an 11 GB one', async () => {
     expect(recommendedWiredMb(16384)).toBe(12288);
     expect(defaultWiredMb(16384)).toBe(10922);
     const w = await readWiredLimit(sh('0\n'), 9.8e9);
-    expect(w).toMatchObject({ supported: true, currentMb: 0, recommendedMb: 12288, ok: false });
-    expect((await readWiredLimit(sh('12288'), 9.8e9)).ok).toBe(true);
+    expect(w).toMatchObject({ supported: true, currentMb: 0, recommendedMb: 12288, ok: true });
+    expect((await readWiredLimit(sh('0\n'), 11e9)).ok).toBe(false);
+    expect((await readWiredLimit(sh('12288'), 11e9)).ok).toBe(true);
   });
   it('raises it through the macOS admin prompt and validates the number', async () => {
     const s = sh('12288');

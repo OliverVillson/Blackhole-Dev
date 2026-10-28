@@ -14,7 +14,7 @@ Starts `mlx_lm.server --model <folder> --host 127.0.0.1 --port 8080 --trust-remo
 
 - A server already serving the same model on the port (e.g. the one opencode uses) is reused; otherwise the next free port is taken.
 - Crashes are explained in plain English (Metal out of memory, mlx_lm missing, port taken, remote code).
-- GPU wired limit: the tab warns when the model plus 2.5 GB does not fit under `iogpu.wired_limit_mb` and offers "Raise to 12 GB", which runs `sysctl` through the macOS administrator prompt (resets on reboot).
+- GPU wired limit: nothing to change for the 9.8 GB Qwen3.6 build on a 16 GB Mac (HEX prompts dequantize in small chunks, so it fits the macOS default of 2/3 of RAM). The tab warns only when the model plus 1 GB does not fit under `iogpu.wired_limit_mb` (or that default) and then offers an optional "Raise to 12 GB", which runs `sysctl` through the macOS administrator prompt (resets on reboot).
 - GGUF models and other servers: set "External server" to a llama.cpp / Ollama `/v1` URL.
 
 ## Models

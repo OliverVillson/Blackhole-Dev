@@ -31,7 +31,7 @@ export const realShell: Shell = {
 
 /**
  * Reads the GPU wired limit. `needBytes` is the model size: the limit is "ok" when the model
- * plus 2.5 GB of KV cache and scratch fits under it.
+ * plus 1 GB of KV cache and scratch fits under it.
  */
 export async function readWiredLimit(sh: Shell = realShell, needBytes = 0): Promise<WiredLimit> {
   if (sh.platform !== 'darwin' || sh.arch !== 'arm64') return { supported: false, ok: true };
@@ -42,8 +42,10 @@ export async function readWiredLimit(sh: Shell = realShell, needBytes = 0): Prom
     return { supported: false, ok: true, totalMb: sh.totalMb };
   }
   const effective = current || defaultWiredMb(sh.totalMb);
-  // Measured on the M5: the 9.8 GB build peaks at 10.6 GB on short prompts; long contexts add KV cache.
-  const needMb = needBytes / 2 ** 20 + 2560;
+  // Measured on the M5: the 9.8 GB build peaks at 10.6 GB (decimal) on short prompts. HEX models
+  // dequantize prompt experts in 256 MB chunks (flint_mlx.py), so long prompts stay close to that and
+  // it fits the default 2/3-of-RAM limit on a 16 GB Mac without a sysctl.
+  const needMb = needBytes / 2 ** 20 + 1024;
   return {
     supported: true,
     currentMb: current,

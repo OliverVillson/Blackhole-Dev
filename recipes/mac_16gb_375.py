@@ -12,8 +12,7 @@ recipe = Recipe(
     title="Mac 16 GB coder, lighter prune",
     description=(
         "Like Mac 16 GB coder but REAP drops 37.5% of routed experts and the MLX groups are 128 wide (~11 "
-        "GB): better quality, needs the Mac's GPU memory limit raised (sudo sysctl "
-        "iogpu.wired_limit_mb=12288) and few other apps open."
+        "GB): better quality, tight on a 16 GB Mac, so keep few other apps open."
     ),
     author="BlackHole-Harness",
     tags=["mac", "code", "moe", "lab"],
