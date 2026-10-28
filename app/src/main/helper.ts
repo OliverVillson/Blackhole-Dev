@@ -11,7 +11,8 @@ export interface HelperOptions {
   args?: string[];
   cwd: string;
   init: InitializeParams;
-  env?: Record<string, string>;
+  /** Extra environment; a function is read at every (re)start, so a new token takes effect on restart. */
+  env?: Record<string, string> | (() => Record<string, string>);
   timeoutMs?: number;
   backoffMs?: number[];
   spawnFn?: typeof spawn;
@@ -65,7 +66,7 @@ export class HelperClient extends EventEmitter {
     this.setStatus({ state: "starting" });
     const proc = (this.opts.spawnFn ?? spawn)(python, args, {
       cwd: this.opts.cwd,
-      env: { ...process.env, ...this.opts.env, PYTHONUNBUFFERED: "1", BLACKHOLE_DEV_RPC: "1" },
+      env: { ...process.env, ...(typeof this.opts.env === "function" ? this.opts.env() : this.opts.env), PYTHONUNBUFFERED: "1", BLACKHOLE_DEV_RPC: "1" },
       stdio: ["pipe", "pipe", "pipe"],
     }) as ChildProcessWithoutNullStreams;
     this.proc = proc;

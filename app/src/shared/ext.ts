@@ -139,6 +139,9 @@ export interface WorkspaceApi {
   listRecipes(): Promise<string[]>;
   readFile(path: string): Promise<string>;
   paths(): Promise<AppPaths>;
+  /** Save `recipe` and every unsaved file under recipes/ and functions/ before a run reads them
+   *  from disk. Resolves with the paths it saved. */
+  saveForRun(recipe: string | null): Promise<string[]>;
 }
 
 export interface RendererContext {

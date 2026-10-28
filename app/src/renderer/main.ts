@@ -129,7 +129,7 @@ async function boot(): Promise<void> {
   cmd("recipe.bundle", "Export bundle (.bhr)", async (path?: string) => {
     const p = path ?? shell.activeFile();
     if (!shell.isRecipe(p)) return toast("Open a recipe first.", "warn");
-    if (shell.editor.isDirty(p)) await shell.editor.save(p);
+    await shell.saveForRun(p);
     const r = await helper("recipe.bundle", { path: p }).catch(report);
     if (r) {
       toast(`Bundle written: ${basename(r.bundle)} (sha256 ${r.sha256.slice(0, 12)}…)`);

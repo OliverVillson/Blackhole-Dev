@@ -191,7 +191,10 @@ button.chip { cursor: pointer; }
 .mi:hover, .mi:focus { background: var(--sel); color: var(--flare); outline: none; }
 .sep { height: 1px; background: var(--line2); margin: 4px 0; }
 .toasts { position: fixed; right: 16px; bottom: 40px; display: flex; flex-direction: column; gap: 8px; z-index: 70; }
-.toast { background: var(--btn); border: 1px solid var(--ash); border-left: 3px solid var(--flare); padding: 10px 14px; border-radius: 4px; max-width: 420px; font-size: 13px; box-shadow: 0 8px 24px var(--shadow); }
+.toast { background: var(--btn); border: 1px solid var(--ash); border-left: 3px solid var(--flare); padding: 10px 14px; border-radius: 4px; max-width: 420px; min-width: 0; font-size: 13px; line-height: 18px; overflow-wrap: anywhere; box-shadow: 0 8px 24px var(--shadow); }
+.toast-row { display: flex; gap: 6px; margin-top: 8px; }
+.toast-full { display: none; margin: 8px 0 0; max-height: 40vh; overflow: auto; font: 11px/16px var(--font-mono); color: var(--dim); white-space: pre-wrap; overflow-wrap: anywhere; }
+.toast-full.on { display: block; }
 .toast.warn { border-left-color: var(--ember); } .toast.error { border-left-color: var(--redshift); }
 
 /* full-tab pages */

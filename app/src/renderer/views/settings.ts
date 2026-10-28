@@ -36,6 +36,9 @@ export function settingsView(shell: Shell): (el: HTMLElement) => void {
     const keyState = h("span", { class: "meta" });
     const key = h("input", { type: "password", placeholder: "sk-ant-…", "aria-label": "Anthropic API key", style: "width:100%", autocomplete: "off" });
     const refreshKey = () => bh.invoke<boolean>("secrets:has", "anthropic-api-key").then((has) => (keyState.textContent = has ? "key set (stored in the macOS Keychain)" : "no key yet"));
+    const hfState = h("span", { class: "meta" });
+    const hfKey = h("input", { type: "password", placeholder: "hf_…", "aria-label": "Hugging Face token", style: "width:100%", autocomplete: "off" });
+    const refreshHf = () => bh.invoke<boolean>("secrets:has", "hf-token").then((has) => (hfState.textContent = has ? "token set (stored in the macOS Keychain)" : "no token (public models only, unless you ran hf auth login)"));
     const licence = h("div", { class: "meta" });
     bh.invoke<{ licence: Licence; version: string }>("app:info").then((i) => (licence.textContent = `BlackHole-Dev ${i.version} · ${i.licence.reason ?? (i.licence.ok ? "licence active" : "licence inactive")}`));
     const checks = h("div", { style: "display:flex;flex-direction:column;gap:4px;padding:0 4px" });
@@ -60,6 +63,17 @@ export function settingsView(shell: Shell): (el: HTMLElement) => void {
         } }, "Save key"),
         h("button", { class: "btn sm", onclick: async () => { await bh.invoke("secrets:delete", "anthropic-api-key"); refreshKey(); } }, "Remove")), keyState,
         h("div", { class: "meta", style: "padding:0 4px" }, "Your key never leaves this Mac except in requests to Anthropic. There is no billing through the app.")),
+      section("Hugging Face token (gated and private models)", hfKey, h("div", { class: "row" },
+        h("button", { class: "btn sm", onclick: async () => {
+          if (!hfKey.value.trim()) return;
+          await bh.invoke("secrets:set", "hf-token", hfKey.value.trim());
+          hfKey.value = "";
+          refreshHf();
+          await bh.invoke("helper:restart");
+          toast("Token saved to the Keychain; the helper restarted with it");
+        } }, "Save token"),
+        h("button", { class: "btn sm", onclick: async () => { await bh.invoke("secrets:delete", "hf-token"); refreshHf(); await bh.invoke("helper:restart"); } }, "Remove")), hfState,
+        h("div", { class: "meta", style: "padding:0 4px" }, "Used on this Mac to read gated models such as RecursiveSI/flint (accept the licence on huggingface.co first). Without it the helper uses `hf auth login` if you ran it. A VM needs its own token: run `hf auth login` there.")),
       section("Keyboard shortcuts", shortcutsList(shell)),
       section("Licence", licence),
       section("Checks", checks, h("div", { class: "row" }, h("button", { class: "btn sm", onclick: () => renderChecks(checks) }, "Run checks again"))),
@@ -71,6 +85,7 @@ export function settingsView(shell: Shell): (el: HTMLElement) => void {
       s.render(box);
     }
     refreshKey();
+    refreshHf();
     renderChecks(checks);
   };
 }

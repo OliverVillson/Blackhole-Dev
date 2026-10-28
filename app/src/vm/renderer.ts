@@ -95,7 +95,7 @@ export function activate(ctx: VmRendererContext): void {
     })),
   });
 
-  const runOnVm = (path?: string) => {
+  const runOnVm = async (path?: string) => {
     const recipe = path ?? ctx.workspace.activeFile();
     if (!recipe || !recipe.endsWith(".py")) {
       ctx.showModal({
@@ -116,6 +116,13 @@ export function activate(ctx: VmRendererContext): void {
           el.append(box);
         },
       });
+      return;
+    }
+    // The run bundles the recipe and its functions from disk, so save what is on screen first.
+    try {
+      await ctx.workspace.saveForRun?.(recipe);
+    } catch (e) {
+      ctx.notify?.(`Could not save before the run: ${(e as Error).message}`, "error");
       return;
     }
     ctx.showModal({

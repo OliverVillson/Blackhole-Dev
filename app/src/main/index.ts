@@ -106,6 +106,11 @@ async function main(): Promise<void> {
     // BLACKHOLE_DEV_HELPER=path/to/script.py runs that script instead of `-m blackhole_dev.rpc` (tests, helper development).
     args: process.env.BLACKHOLE_DEV_HELPER ? [process.env.BLACKHOLE_DEV_HELPER] : undefined,
     cwd: paths.workspace,
+    // The Hugging Face token from Settings, for gated or private Hub models; restart the helper after changing it.
+    env: (): Record<string, string> => {
+      const t = secrets.getSync("hf-token");
+      return t ? { HF_TOKEN: t } : {};
+    },
     init: {
       workspace: paths.workspace,
       recipesDir: paths.recipes,

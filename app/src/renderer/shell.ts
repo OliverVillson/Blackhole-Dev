@@ -14,7 +14,7 @@ import type {
   SettingsSectionDef, StatusItemDef, StatusItemHandle, TabTypeDef, TerminalApi, WorkspaceApi,
 } from "../shared/ext";
 import type { ConfirmRequest } from "../shared/gate";
-import { isRecipePath, resolveInWorkspace } from "../shared/wspath";
+import { filesToSaveForRun, isRecipePath, resolveInWorkspace } from "../shared/wspath";
 import type { HelperStatus, Problem } from "../shared/rpc";
 
 interface Slot {
@@ -1119,7 +1119,15 @@ export class Shell {
       return b ? Promise.resolve(b.model.getValue()) : bh.invoke<string>("ws:read", path);
     },
     paths: async () => this.paths,
+    saveForRun: (recipe) => this.saveForRun(recipe),
   };
+
+  /** Run on VM and Export bundle read the recipe and its functions from disk: save them first. */
+  async saveForRun(recipe: string | null): Promise<string[]> {
+    const files = filesToSaveForRun(this.paths, recipe, this.editor.dirtyPaths());
+    for (const f of files) await this.editor.save(f);
+    return files;
+  }
 
   readonly gate = { confirm: (req: ConfirmRequest) => bh.invoke<boolean>("gate:confirm", req) };
 
