@@ -7,7 +7,7 @@ import { Secrets } from "./secrets";
 import { Settings } from "./settings";
 import * as licence from "./licence";
 import { Workspace, ensureWorkspace, workspacePaths } from "./workspace";
-import { pickPython, runChecks } from "./python";
+import { pickPython, runChecks, sourceCheckout } from "./python";
 import { Terminals } from "./terminal";
 import { Host } from "./host";
 import { buildMenu } from "./menu";
@@ -144,7 +144,7 @@ async function main(): Promise<void> {
   const reg = (module: string, channel: string, fn: (...a: any[]) => unknown) => host.register(module, channel, fn);
   reg("app", "app:info", () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch, licence: licence.status(), pty: terms.hasPty, channels: host.channels() }));
   reg("app", "app:logs", () => logs.slice(-500));
-  reg("app", "app:checks", () => runChecks(python()));
+  reg("app", "app:checks", () => runChecks(python(), sourceCheckout(app.getAppPath())));
   reg("app", "app:openExternal", (url: string) => {
     if (!/^https:\/\//.test(url)) throw new Error("only https links open externally");
     return shell.openExternal(url);

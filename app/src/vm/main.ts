@@ -4,6 +4,7 @@ import { execFile } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pickPython } from "../main/python";
 import { pythonCloud } from "./cloud";
 import type { VmMainContext } from "./ctx";
 import { HostStore } from "./hosts";
@@ -52,7 +53,7 @@ export function checkoutWheel(python: () => string): () => Promise<{ path: strin
 
 export async function activate(ctx: VmMainContext): Promise<{ deactivate(): void }> {
   const electron = await import("electron").catch(() => null);
-  const python = () => ctx.settings.get<string>("python.path", "") || join(process.resourcesPath ?? "", "python/bin/python3");
+  const python = () => pickPython(ctx.settings.get<string>("python.path", ""), process.resourcesPath);
   const jobs = new JobsService({
     remote: new OpenSsh(),
     hosts: new HostStore(ctx.settings),
