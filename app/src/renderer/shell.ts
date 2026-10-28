@@ -14,6 +14,7 @@ import type {
   SettingsSectionDef, StatusItemDef, StatusItemHandle, TabTypeDef, TerminalApi, WorkspaceApi,
 } from "../shared/ext";
 import type { ConfirmRequest } from "../shared/gate";
+import { isRecipePath, resolveInWorkspace } from "../shared/wspath";
 import type { HelperStatus, Problem } from "../shared/rpc";
 
 interface Slot {
@@ -639,6 +640,8 @@ export class Shell {
   }
 
   async openFile(path: string, line?: number, opts: { readonly?: boolean; text?: string; title?: string; group?: Group; create?: boolean } = {}): Promise<void> {
+    // One buffer per file: a workspace-relative path (from the copilot) opens the same tab as the absolute one.
+    if (!opts.readonly && this.paths) path = resolveInWorkspace(this.paths.workspace, path);
     const key = `file:${path}`;
     let tab = opts.group ? opts.group.tabs.find((x) => x.key === key) : this.findTab(key);
     if (!tab) {
@@ -897,7 +900,7 @@ export class Shell {
   }
 
   isRecipe(path: string | null): path is string {
-    return !!path && !!this.paths && path.startsWith(this.paths.recipes) && path.endsWith(".py");
+    return isRecipePath(this.paths, path);
   }
 
   private renderCrumbs(g: Group): void {
@@ -1111,6 +1114,7 @@ export class Shell {
     open: (path, line, opts) => this.openFile(path, line, { create: opts?.create }),
     listRecipes: async () => flatten(await bh.invoke("ws:list", this.paths.recipes)),
     readFile: (path) => {
+      if (this.paths) path = resolveInWorkspace(this.paths.workspace, path);
       const b = this.editor.buffers.get(path);
       return b ? Promise.resolve(b.model.getValue()) : bh.invoke<string>("ws:read", path);
     },

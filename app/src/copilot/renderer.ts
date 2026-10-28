@@ -1,5 +1,6 @@
 // Copilot, renderer side: the right-hand panel, the activity icon, Cmd+I and a status item.
-import type { RendererContext } from "../shared/ext";
+import type { AppPaths, RendererContext } from "../shared/ext";
+import { relativeToWorkspace, resolveInWorkspace } from "../shared/wspath";
 import { focusCopilot, renderCopilotPanel } from "./panel";
 import { CopilotSession, type CopilotState } from "./session";
 import { makeTurnTransport } from "./transport";
@@ -16,6 +17,8 @@ const STATUS: Record<CopilotState, string> = {
 };
 
 export function activate(ctx: RendererContext): void {
+  let paths: AppPaths | null = null;
+  void ctx.workspace.paths().then((p) => (paths = p)).catch(() => undefined);
   const session = new CopilotSession({
     editor: ctx.editor,
     activeFile: () => ctx.workspace.activeFile(),
@@ -26,6 +29,9 @@ export function activate(ctx: RendererContext): void {
     openFile: async (path, opts) => {
       await ctx.workspace.open(path, undefined, opts);
     },
+    // The model speaks workspace-relative paths; the editor keys buffers by absolute ones.
+    resolvePath: (p) => (paths ? resolveInWorkspace(paths.workspace, p) : p),
+    displayPath: (p) => (paths ? relativeToWorkspace(paths.workspace, p) : p),
   });
 
   let panelEl: HTMLElement | null = null;

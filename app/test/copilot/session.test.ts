@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { LlmChunk } from "../../src/llm/types";
 import { CopilotSession, cleanError, type CopilotEvent, type TurnRequest } from "../../src/copilot/session";
 import { FakeEditor } from "./fakeEditor";
+import { isRecipePath, relativeToWorkspace, resolveInWorkspace } from "../../src/shared/wspath";
 
 type Script = (req: TurnRequest, t: Tools) => AsyncGenerator<LlmChunk>;
 interface Tools { pump(n?: number): void; ed: FakeEditor; aborted: Promise<void> }
 
-function setup(scripts: Script[], opts: { active?: string; disk?: Record<string, string>; helper?: (method: string, params: any) => unknown; invoke?: (channel: string, payload: any) => unknown } = {}) {
+function setup(scripts: Script[], opts: { active?: string; disk?: Record<string, string>; helper?: (method: string, params: any) => unknown; invoke?: (channel: string, payload: any) => unknown; workspace?: string } = {}) {
   const ed = new FakeEditor();
   const reqs: TurnRequest[] = [];
   const helperCalls: [string, any][] = [];
@@ -54,6 +55,9 @@ function setup(scripts: Script[], opts: { active?: string; disk?: Record<string,
       return () => (tick = null);
     },
     pacer: { lookaheadLines: 1, charsPerTick: 4 },
+    ...(opts.workspace
+      ? { resolvePath: (p: string) => resolveInWorkspace(opts.workspace!, p), displayPath: (p: string) => relativeToWorkspace(opts.workspace!, p) }
+      : {}),
   });
   const events: CopilotEvent[] = [];
   session.on((e) => events.push(e));
@@ -269,6 +273,40 @@ describe("CopilotSession", () => {
     const writes = t.events.filter((e) => e.type === "write").map((e: any) => e.status);
     expect(writes).toEqual(["start", "done"]);
     expect(t.events.some((e) => e.type === "code" && e.text === content)).toBe(true);
+  });
+
+  it("a recipe the copilot creates by relative path opens under its absolute path (one buffer, Plan works)", async () => {
+    const WS = "/Users/me/BlackHole-Dev";
+    const content = RECIPE.join("\n") + "\n";
+    let t!: ReturnType<typeof setup>;
+    const waitFor = async (id: string) => {
+      while (!t.toolResults.has(id)) await new Promise((r) => setTimeout(r, 1));
+      return t.toolResults.get(id)!;
+    };
+    t = setup(
+      [
+        async function* () {
+          yield { type: "tool_run", callId: "w1", name: "write_file", input: { path: "recipes/qwen/x.py", content } } as any;
+          const w = await waitFor("w1");
+          // the model keeps seeing the workspace-relative path it used
+          expect(w.content).toContain("Wrote 5 line(s) to recipes/qwen/x.py");
+          yield { type: "tool_run", callId: "p1", name: "plan_recipe", input: { path: "recipes/qwen/x.py", device: "mac-16" } } as any;
+          await waitFor("p1");
+          yield { type: "text", text: "Done.\n```python path=recipes/qwen/y.py mode=new\nx = 1\n```\n" };
+          yield { type: "done", finishReason: "stop" };
+        },
+      ],
+      { disk: {}, workspace: WS },
+    );
+    await t.session.ask("make a qwen recipe");
+    t.done();
+    expect(t.opened.map(([p]) => p)).toEqual([`${WS}/recipes/qwen/x.py`, `${WS}/recipes/qwen/y.py`]);
+    expect(t.ed.getText(`${WS}/recipes/qwen/x.py`)).toBe(content);
+    expect(t.helperCalls[0]).toEqual(["recipe.plan", { path: `${WS}/recipes/qwen/x.py`, device: "mac-16", text: content }]);
+    expect([...t.session.touched].sort()).toEqual([`${WS}/recipes/qwen/x.py`, `${WS}/recipes/qwen/y.py`]);
+    expect(t.session.display(`${WS}/recipes/qwen/x.py`)).toBe("recipes/qwen/x.py");
+    const paths = { workspace: WS, recipes: `${WS}/recipes` };
+    for (const p of t.session.touched) expect(isRecipePath(paths, p)).toBe(true);
   });
 
   it("write_file works as a normal tool call too, and rewrite replaces the file", async () => {

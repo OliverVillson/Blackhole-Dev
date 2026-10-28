@@ -338,7 +338,7 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
     const el = h("div", { class: "cp-box" });
     const hdr = h("div", { class: "cp-box-hd" });
     const st = h("span", { class: "st" }, status);
-    hdr.append(h("span", { class: "tag" }, tag), h("span", { class: "path", title: file }, file), st, h("button", { class: "cp-copy", type: "button" }, "Copy"));
+    hdr.append(h("span", { class: "tag" }, tag), h("span", { class: "path", title: file }, session.display(file)), st, h("button", { class: "cp-copy", type: "button" }, "Copy"));
     const pre = h("pre");
     const code = h("code");
     pre.append(code);

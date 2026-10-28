@@ -67,6 +67,11 @@ export interface CopilotHost {
   every?(ms: number, fn: () => void): () => void;
   pacer?: PacerOptions;
   newFilePath?: string;
+  /** Turns a workspace-relative path from the model into the absolute path the editor keys
+   *  buffers by, so a file the copilot opens is the same tab the sidebar opens. */
+  resolvePath?(path: string): string;
+  /** The reverse, for what the model and the panel see. */
+  displayPath?(path: string): string;
 }
 
 interface TurnResult {
@@ -113,6 +118,16 @@ export class CopilotSession {
   dispose(): void {
     this.stop();
     this.unsubEdit();
+  }
+
+  /** Absolute path for a path the model gave (or a path already absolute). */
+  resolve(path: string): string {
+    return this.host.resolvePath ? this.host.resolvePath(path) : path;
+  }
+
+  /** Workspace-relative path for the model and the panel. */
+  display(path: string): string {
+    return this.host.displayPath ? this.host.displayPath(path) : path;
   }
 
   on(cb: (e: CopilotEvent) => void): () => void {
@@ -321,7 +336,7 @@ export class CopilotSession {
     for (const [file, es] of byFile) {
       const nums: number[] = [];
       for (const e of es) for (let l = e.startLine; l <= e.endLine; l++) nums.push(l);
-      lines.push(`${file}: lines ${compactRanges(nums)} now read:`);
+      lines.push(`${this.display(file)}: lines ${compactRanges(nums)} now read:`);
       const text = this.safeText(file);
       if (text !== null) {
         const all = text.split("\n");
@@ -412,7 +427,7 @@ export class CopilotSession {
   }
 
   private openPacer(info: FenceInfo): Pacer {
-    const file = info.path ?? this.host.activeFile() ?? this.host.newFilePath ?? "recipes/untitled.py";
+    const file = this.resolve(info.path ?? this.host.activeFile() ?? this.host.newFilePath ?? "recipes/untitled.py");
     this.touched.add(file);
     // Code is buffered (shown as ghost) until the file is open and we know where to write.
     const p = new Pacer(this.host.editor, file, null, this.host.pacer);
@@ -509,7 +524,8 @@ export class CopilotSession {
         }
         this.emit({ type: "tool", id: c.id, name: c.name, status: TOOL_BY_NAME.get(c.name)?.side === "gated" ? "waiting" : "running", summary: describeCall(c.name, v.value) });
         try {
-          const out = await this.runTool(c.name, v.value);
+          const input = v.value as { path?: unknown };
+          const out = await this.runTool(c.name, typeof input?.path === "string" ? { ...input, path: this.resolve(input.path) } : input);
           this.emit({ type: "tool", id: c.id, name: c.name, status: "ok", summary: out.summary });
           return { type: "tool_result", tool_use_id: c.id, content: out.content };
         } catch (err) {
@@ -526,11 +542,11 @@ export class CopilotSession {
     switch (name) {
       case "read_file": {
         const t = await this.readAny(input.path);
-        return { content: numbered(t), summary: `read ${input.path} · ${t.split("\n").length} lines` };
+        return { content: numbered(t), summary: `read ${this.display(input.path)} · ${t.split("\n").length} lines` };
       }
       case "list_files": {
         const files = this.host.listFiles ? await this.host.listFiles() : [];
-        return { content: files.length ? files.join("\n") : "No recipe files yet.", summary: `listed ${files.length} recipe file(s)` };
+        return { content: files.length ? files.map((f) => this.display(f)).join("\n") : "No recipe files yet.", summary: `listed ${files.length} recipe file(s)` };
       }
       case "write_file": {
         const mode: FenceInfo["mode"] = input.mode ?? "new";
@@ -548,13 +564,13 @@ export class CopilotSession {
         this.setState("tools");
         if (stopped) {
           return {
-            content: `Interrupted after ${lines} line(s) of ${p.file}: the user stopped or steered you. What was typed stays; continue with mode=append if asked to.`,
-            summary: `stopped writing ${p.file} · ${lines} lines`,
+            content: `Interrupted after ${lines} line(s) of ${this.display(p.file)}: the user stopped or steered you. What was typed stays; continue with mode=append if asked to.`,
+            summary: `stopped writing ${this.display(p.file)} · ${lines} lines`,
           };
         }
         return {
-          content: `Wrote ${lines} line(s) to ${p.file}. They are in the editor as pending changes the user can accept or reject; read_file, lint_recipe and plan_recipe see them now.`,
-          summary: `wrote ${p.file} · ${lines} lines`,
+          content: `Wrote ${lines} line(s) to ${this.display(p.file)}. They are in the editor as pending changes the user can accept or reject; read_file, lint_recipe and plan_recipe see them now.`,
+          summary: `wrote ${this.display(p.file)} · ${lines} lines`,
         };
       }
       case "edit_file": {
@@ -566,7 +582,7 @@ export class CopilotSession {
         this.touched.add(input.path);
         ed.applyEdits(input.path, plan.edits);
         this.emit({ type: "edit", file: input.path, edits: input.edits });
-        return { content: `Applied ${plan.edits.length} edit(s) to ${input.path}. They show as pending changes the user can accept or reject.`, summary: `edited ${input.path} · ${plan.edits.length} change(s)` };
+        return { content: `Applied ${plan.edits.length} edit(s) to ${this.display(input.path)}. They show as pending changes the user can accept or reject.`, summary: `edited ${this.display(input.path)} · ${plan.edits.length} change(s)` };
       }
       case "request_action": {
         const channel = GATED_CHANNELS[input.action];
