@@ -1,15 +1,26 @@
 // I6 jobs API: the types main and renderer share, and the channel names.
 // Everything here is plain data so it crosses the window.bh bridge unchanged.
 
+/** Where to delete a VM by hand (the same list `blackhole down` prints). */
+export const CONSOLES: { provider: string; url: string }[] = [
+  { provider: "nebius", url: "https://console.nebius.com" },
+  { provider: "evroc", url: "https://cloud.evroc.com" },
+  { provider: "lambda", url: "https://cloud.lambda.ai/instances" },
+];
+
+/** What Forget did: the machine left the list, the VM itself (if any) was not touched. */
+export interface ForgetResult { label: string; message: string; consoles: { provider: string; url: string }[] }
+
 /** A machine the app can run on. */
 export interface Host {
   id: string;                 // "ssh:<alias>", "app:<user@host>", "vm:<machine name>"
   label: string;
-  kind: "ssh" | "vm";         // vm = made by `blackhole up`, so the app can also stop or delete it
+  kind: "ssh" | "vm";         // vm = rented by `blackhole up`, so the app can also stop or delete it
   target: string;             // what ssh gets: an alias from ~/.ssh/config or user@host
   port?: number;
   identityFile?: string;
-  source: "ssh-config" | "app" | "blackhole-up";
+  /** blackhole-host: recorded by `blackhole up --host` (set up by the harness, not rented by it). */
+  source: "ssh-config" | "app" | "blackhole-up" | "blackhole-host";
   /** The user's own hourly rate for this machine (the app never bills). A VM made by `blackhole up` carries the provider's price. */
   ratePerHour?: number;
   currency?: string;
@@ -146,6 +157,7 @@ export const CH = {
   hostsUpdate: "vm:hosts.update",
   hostsRemove: "vm:hosts.remove",
   hostsTest: "vm:hosts.test",
+  hostsForget: "vm:hosts.forget",
   vmOffer: "vm:vm.offer",
   vmUp: "vm:vm.up",
   vmDown: "vm:vm.down",

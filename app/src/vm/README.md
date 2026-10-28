@@ -31,6 +31,8 @@ Machines, Run on VM, the job monitor and the jobs API (I6). Main side in `main.t
   (`$BLACKHOLE_HOME/machines/*.json`, with the provider's price).
 - ssh is the system OpenSSH with a ControlMaster per host, so the user's config, ProxyJump, agent
   and keychain work as in their terminal. `BatchMode=yes` everywhere except the terminal.
+- Right-click a machine (Machines view or the Run on VM list), or its ×, for Stop VM, Delete VM and
+  Forget. Machines set up with `blackhole up --host` are listed from their records as plain hosts.
 - `blackhole up` / `down` run the harness's own `blackhole.cloud.cli` with the app's Python
   (`python.path` setting, else the bundled runtime). The app adds only the gate.
 
@@ -39,7 +41,9 @@ Machines, Run on VM, the job monitor and the jobs API (I6). Main side in `main.t
 | action | gate | notes |
 | --- | --- | --- |
 | `vm:vm.up`, resume | `vm.up` | shows the provider's offer line and price first |
-| `vm:vm.down` | `vm.down` | a delete with models on the VM is refused by `blackhole down` until "Delete anyway" (a second gate) |
+| `vm:vm.down`, stop | `vm.down` | disk kept |
+| `vm:vm.down`, delete | `vm.delete` | human only: main refuses it from the copilot and the gate refuses a copilot request. A delete with models on the VM is refused by `blackhole down` until "Delete anyway" (a second gate) |
+| `vm:hosts.forget` | none | takes a machine off the list only (`blackhole down NAME --forget` for VM records, hidden for ~/.ssh/config hosts); the reply carries the provider console links, since a forgotten VM keeps billing |
 | `vm:job.launch` | `run.launch` | cost = rate x plan estimate |
 | `vm:job.pull` | `download` | a caller cannot pass "already approved" |
 | `vm:copilot.*` | same as above, `requestedBy: "copilot"` | the copilot can only stop a VM, never delete it |

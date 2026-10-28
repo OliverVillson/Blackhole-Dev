@@ -69,6 +69,14 @@ export async function resume(cloud: CloudRunner, name: string, onLine: (l: strin
   if (r.code !== 0) throw new Error(r.out.trim().split("\n").pop()?.replace(/^✗\s*/, "") || "resume failed");
 }
 
+/** Drops the record only (`blackhole down NAME --forget`); the VM, if it exists, keeps running. */
+export async function forget(cloud: CloudRunner, name: string, onLine: (l: string) => void): Promise<string> {
+  const r = await cloud.run(["down", name, "--forget"], onLine);
+  const lines = r.out.trim().split("\n");
+  if (r.code !== 0) throw new Error(lines.pop()?.replace(/^✗\s*/, "") || "blackhole down --forget failed");
+  return lines[0] ?? `forgot ${name}`;
+}
+
 export interface DownResult { done: boolean; blockedBy?: string[]; message: string }
 
 /** stop (keepDisk) or delete. A delete with models still on the VM is refused by `down` itself unless force. */
