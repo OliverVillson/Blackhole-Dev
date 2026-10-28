@@ -19,8 +19,8 @@ recipe = Recipe(
         "updates, every layer and router matched to the teacher; two on-policy rounds (the student writes "
         "in vLLM, the teacher grades); MLX export with HEX experts (REAQ tiers: top 10% by REAP 16-level "
         "tables, rest 8-level), GPTQ attention (q/o 3-bit), an output-only vocab trim to the 64k tokens "
-        "the teacher writes (of 248k); finally a heal around the quantized model. Needs vLLM (setup-vm.sh "
-        "installs it in ~/vllm-venv) and flash-linear-attention."
+        "the teacher writes (of 248k); finally a heal around the quantized model. Needs vLLM and "
+        "flash-linear-attention (the VM installer puts both there)."
     ),
     author="BlackHole-Harness",
     tags=["mac", "code", "moe", "lab", "reaq", "distill", "qwen"],
