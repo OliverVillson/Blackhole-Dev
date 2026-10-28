@@ -13,7 +13,7 @@
 import { LAB } from "./themes-lab";
 
 export type Density = "compact" | "regular" | "roomy";
-export type ThemeGroup = "blackhole" | "comfort" | "greyscale" | "beige" | "classic" | "experimental";
+export type ThemeGroup = "blackhole" | "comfort" | "greyscale" | "beige" | "classic";
 export interface Metrics { ui: number; code: number; lh: number; row: number }
 
 interface Syntax { kw: string; str: string; num: string; com: string; fn: string; deco: string; punc: string; type?: string; key?: string; lit?: string; op?: string }
@@ -441,7 +441,8 @@ const SPECS: Spec[] = [
   },
 ];
 
-export const THEMES: Theme[] = [...SPECS, ...LAB].map(make);
+const GROUP_ORDER: ThemeGroup[] = ["blackhole", "comfort", "greyscale", "beige", "classic"];
+export const THEMES: Theme[] = GROUP_ORDER.flatMap((g) => [...SPECS, ...LAB].filter((s) => s.group === g)).map(make);
 export const DEFAULT_THEME = "singularity";
 
 export function themeById(id: string | null | undefined): Theme {

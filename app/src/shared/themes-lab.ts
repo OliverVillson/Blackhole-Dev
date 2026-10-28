@@ -1,6 +1,7 @@
-// Experimental themes. Beyond colours and fonts many carry effect CSS ("&" is the theme's root
-// selector) for glow, scanlines, grain, glass and the like; Dark Matter also dims the editor away
-// from the cursor (Spec.focus). Fonts: renderer/fonts-lab.ts.
+// More themes, kept apart from themes.ts because beyond colours and fonts most carry effect CSS
+// ("&" is the theme's root selector) for glow, scanlines, grain, glass and the like; Dark Matter
+// also dims the editor away from the cursor (Spec.focus). They join the regular groups (THEMES
+// orders them by group). Fonts: renderer/fonts-lab.ts.
 
 import type { Spec } from "./themes";
 
@@ -14,7 +15,7 @@ const SEL_TEXT = (c: string) => `${SEL_ROWS} { color: ${c}; box-shadow: none; } 
 
 export const LAB: Spec[] = [
   {
-    id: "white-hole", name: "White Hole", group: "experimental", light: true,
+    id: "white-hole", name: "White Hole", group: "greyscale", light: true,
     blurb: "Strictly 1-bit black and white; syntax by weight, slant and underline. The mark inverts.",
     bg: "#ffffff", chrome: "#ffffff", surface: "#ffffff", surface2: "#ffffff", sel: "#000000",
     border: "#000000", border2: "#000000",
@@ -40,7 +41,7 @@ export const LAB: Spec[] = [
       & .bh-ghost { color: transparent; -webkit-text-stroke: .6px #000; opacity: 1; }`,
   },
   {
-    id: "hawking-radiation", name: "Hawking Radiation", group: "experimental",
+    id: "hawking-radiation", name: "Hawking Radiation", group: "blackhole",
     blurb: "Amber CRT: one hue, phosphor glow on every letter, scanlines and a curved-glass vignette.",
     bg: "#0c0700", chrome: "#110a00", surface: "#140c01", surface2: "#1f1404", sel: "#3a2606",
     border: "#2a1c05", border2: "#4a3209",
@@ -55,7 +56,7 @@ export const LAB: Spec[] = [
       ${OVER} background: radial-gradient(ellipse at center, transparent 58%, rgba(0,0,0,.6) 100%), repeating-linear-gradient(0deg, transparent 0 2px, rgba(0,0,0,.22) 2px 3px); }`,
   },
   {
-    id: "blueprint", name: "Blueprint", group: "experimental",
+    id: "blueprint", name: "Blueprint", group: "blackhole",
     blurb: "Engineering drawing: Prussian blue, white line work, a drafting grid, hand-lettered headings.",
     bg: "#0f3b84", chrome: "#0c3272", surface: "#0e367a", surface2: "#144594", sel: "#1d55ad",
     border: "#3f6bb3", border2: "#6f93cc",
@@ -72,7 +73,7 @@ export const LAB: Spec[] = [
       & .monaco-editor .view-overlays .current-line { outline: 1px dashed rgba(255,216,74,.7); outline-offset: -1px; }`,
   },
   {
-    id: "concrete", name: "Concrete", group: "experimental", light: true,
+    id: "concrete", name: "Concrete", group: "blackhole", light: true,
     blurb: "Neo-brutalist: hard black borders and offset shadows, safety yellow, square corners.",
     bg: "#f2f2ef", chrome: "#e4e4df", surface: "#ebebe7", surface2: "#ffffff", sel: "#ffe600",
     border: "#111111", border2: "#111111",
@@ -92,7 +93,7 @@ export const LAB: Spec[] = [
       & .ab.on { color: #000; box-shadow: inset 4px 0 0 #ffe600; } & .crumbs .live, & .tone-warn { color: #a83200; font-weight: 700; }`,
   },
   {
-    id: "overprint", name: "Overprint", group: "experimental", light: true,
+    id: "overprint", name: "Overprint", group: "blackhole", light: true,
     blurb: "Risograph duotone: pink and blue inks slightly out of register, paper grain.",
     bg: "#f5f2ec", chrome: "#ece8df", surface: "#efebe3", surface2: "#e4dfd4", sel: "#ffd6ea",
     border: "#d9d3c6", border2: "#a9b4dc",
@@ -109,7 +110,7 @@ export const LAB: Spec[] = [
       ${OVER} background-image: ${GRAIN}; opacity: .16; mix-blend-mode: multiply; }`,
   },
   {
-    id: "ultraviolet", name: "Ultraviolet", group: "experimental",
+    id: "ultraviolet", name: "Ultraviolet", group: "blackhole",
     blurb: "Blacklight poster: fluorescent chartreuse, pink and cyan that glow.",
     bg: "#0d0020", chrome: "#12002c", surface: "#110028", surface2: "#1d0442", sel: "#33066e",
     border: "#250952", border2: "#3e0f80",
@@ -127,7 +128,7 @@ export const LAB: Spec[] = [
       ${OVER} background: radial-gradient(ellipse at 50% 120%, rgba(130,0,255,.24), transparent 60%); mix-blend-mode: screen; }`,
   },
   {
-    id: "broadsheet", name: "Broadsheet", group: "experimental", light: true,
+    id: "broadsheet", name: "Broadsheet", group: "beige", light: true,
     blurb: "Newspaper: serif headlines and UI, typewriter code, double rules, one red spot colour.",
     bg: "#f6f5f0", chrome: "#ebe9e2", surface: "#efede7", surface2: "#e4e1d8", sel: "#dcd8cc",
     border: "#cbc7bb", border2: "#1a1a1a",
@@ -146,7 +147,7 @@ export const LAB: Spec[] = [
       & .tab { font-style: italic; } & .tab.on { font-style: normal; font-weight: 600; }`,
   },
   {
-    id: "abyssal", name: "Abyssal", group: "experimental",
+    id: "abyssal", name: "Abyssal", group: "comfort",
     blurb: "Deep sea: glowing teal and jellyfish magenta, light spots and drifting marine snow.",
     bg: "#010a12", chrome: "#020d17", surface: "#03111d", surface2: "#071a2a", sel: "#0b2b42",
     border: "#0a2134", border2: "#12344f",
@@ -163,7 +164,7 @@ export const LAB: Spec[] = [
       & .brand b span { color: #ff5fe0; text-shadow: 0 0 8px #ff5fe0; }`,
   },
   {
-    id: "four-shades", name: "Four Shades", group: "experimental", light: true,
+    id: "four-shades", name: "Four Shades", group: "classic", light: true,
     blurb: "The four greens of the first handheld LCDs and nothing else. Pixel fonts.",
     bg: "#9bbc0f", chrome: "#8bac0f", surface: "#9bbc0f", surface2: "#8bac0f", sel: "#0f380f",
     border: "#306230", border2: "#306230",
@@ -184,7 +185,7 @@ export const LAB: Spec[] = [
       ${OVER} background: repeating-linear-gradient(0deg, rgba(15,56,15,.08) 0 1px, transparent 1px 3px), repeating-linear-gradient(90deg, rgba(15,56,15,.08) 0 1px, transparent 1px 3px); }`,
   },
   {
-    id: "observatory", name: "Observatory", group: "experimental",
+    id: "observatory", name: "Observatory", group: "blackhole",
     blurb: "Red only, so night vision survives, the way astronomers read charts in the dark.",
     bg: "#050000", chrome: "#080000", surface: "#0a0101", surface2: "#140303", sel: "#2e0606",
     border: "#1e0404", border2: "#3a0909",
@@ -197,7 +198,7 @@ export const LAB: Spec[] = [
     fx: `& .dot:not(.ok):not(.live) { background: transparent; box-shadow: inset 0 0 0 1.5px #b8301f; }`,
   },
   {
-    id: "aurora", name: "Aurora", group: "experimental",
+    id: "aurora", name: "Aurora", group: "comfort",
     blurb: "Northern lights: green and violet ribbons over a blue-black night sky.",
     bg: "#060a13", chrome: "#070c17", surface: "#08101c", surface2: "#0e1828", sel: "#15263d",
     border: "#111d2e", border2: "#1d2f48",
@@ -214,7 +215,7 @@ export const LAB: Spec[] = [
       & .right { background: linear-gradient(180deg, rgba(176,123,255,.08), transparent 40%), var(--bg2); }`,
   },
   {
-    id: "bauhaus", name: "Bauhaus", group: "experimental", light: true,
+    id: "bauhaus", name: "Bauhaus", group: "beige", light: true,
     blurb: "Red, blue and yellow on cream, thick black rules, geometric type.",
     bg: "#f3eee3", chrome: "#e9e2d3", surface: "#ece6d9", surface2: "#fffaf0", sel: "#f2c12e",
     border: "#1a1a1a", border2: "#1a1a1a",
@@ -234,7 +235,7 @@ export const LAB: Spec[] = [
       ${SEL_ROWS} { font-weight: 600; box-shadow: none; }`,
   },
   {
-    id: "dark-matter", name: "Dark Matter", group: "experimental",
+    id: "dark-matter", name: "Dark Matter", group: "comfort",
     blurb: "Focus mode: only the code around the cursor is lit; everything else fades into the dark.",
     bg: "#050506", chrome: "#050506", surface: "#050506", surface2: "#0d0d10", sel: "#18181e",
     border: "#111115", border2: "#1d1d24",
@@ -250,7 +251,7 @@ export const LAB: Spec[] = [
       & .monaco-editor .view-overlays .current-line { background: radial-gradient(ellipse 60% 100% at 30% 50%, rgba(143,125,255,.14), transparent) !important; }`,
   },
   {
-    id: "cryo", name: "Cryo", group: "experimental", light: true,
+    id: "cryo", name: "Cryo", group: "comfort", light: true,
     blurb: "Frosted glass: translucent, blurred panels over soft ice-blue light.",
     bg: "#f7fbff", chrome: "#eaf3fc", surface: "#eef5fd", surface2: "#ffffff", sel: "#d3e6fb",
     border: "#d2e2f2", border2: "#b5cde6",
@@ -271,7 +272,7 @@ export const LAB: Spec[] = [
       & .btn.pri { box-shadow: 0 4px 12px rgba(26,124,255,.35); }`,
   },
   {
-    id: "pulsar", name: "Pulsar", group: "experimental",
+    id: "pulsar", name: "Pulsar", group: "blackhole",
     blurb: "Maximum contrast: black, white, yellow and cyan, 2px outlines, a yellow focus ring.",
     bg: "#000000", chrome: "#000000", surface: "#000000", surface2: "#141414", sel: "#ffff00",
     border: "#9a9a9a", border2: "#ffffff",

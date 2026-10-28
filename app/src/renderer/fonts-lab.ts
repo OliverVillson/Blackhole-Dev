@@ -1,4 +1,4 @@
-// Faces for the experimental themes (shared/themes-lab.ts), Latin subset only.
+// Faces for the themes in shared/themes-lab.ts, Latin subset only.
 import "@fontsource/dotgothic16/latin-400.css";
 import "@fontsource/anonymous-pro/latin-400.css";
 import "@fontsource/anonymous-pro/latin-700.css";
