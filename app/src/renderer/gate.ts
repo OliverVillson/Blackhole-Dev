@@ -16,6 +16,7 @@ const gate = (window as unknown as { gate: GateBridge }).gate;
 const LABEL: Record<string, string> = {
   "vm.up": "Start a cloud VM",
   "vm.down": "Stop a cloud VM",
+  "vm.delete": "Delete a cloud VM",
   "run.launch": "Launch a pipeline run",
   download: "Download a large model",
   "paid.api": "Spend paid API credit",

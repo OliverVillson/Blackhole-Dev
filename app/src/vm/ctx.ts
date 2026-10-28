@@ -1,7 +1,7 @@
 // The parts of the shell's contexts (WS1, app/src/shared/ext.ts) this module uses, written out
 // structurally so the VM code and its tests build without the rest of the app.
 
-export type GatedAction = "vm.up" | "vm.down" | "run.launch" | "download" | "paid.api" | "paid.gpu";
+export type GatedAction = "vm.up" | "vm.down" | "vm.delete" | "run.launch" | "download" | "paid.api" | "paid.gpu";
 
 export interface ConfirmRequest {
   action: GatedAction;

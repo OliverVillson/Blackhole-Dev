@@ -72,6 +72,8 @@ interface MachineRecord {
   name: string; provider: string; gpu: string; size: string; region: string; login: string;
   created: number; address: string | null; id: string | null; state: "creating" | "running" | "stopped";
   usd_per_hour: number | null;
+  managed?: boolean;          // false: recorded by `blackhole up --host`, not rented
+  port?: number | null;
 }
 
 export function blackholeHome(env = process.env, home = homedir()): string {
@@ -86,6 +88,18 @@ export function machineHosts(env = process.env, home = homedir()): Host[] {
   for (const f of readdirSync(dir).filter((f) => f.endsWith(".json")).sort()) {
     try {
       const m = JSON.parse(readFileSync(join(dir, f), "utf8")) as MachineRecord;
+      if (m.managed === false) {
+        out.push({
+          id: `vm:${m.name}`,
+          label: m.name,
+          kind: "ssh",
+          target: m.address ? `${m.login}@${m.address}` : "",
+          port: m.port ?? undefined,
+          source: "blackhole-host",
+          provider: m.provider || undefined,
+        });
+        continue;
+      }
       out.push({
         id: `vm:${m.name}`,
         label: m.name,
@@ -134,9 +148,13 @@ export class HostStore {
     return this.settings.get<Record<string, HostPrefs>>("vm.hostPrefs", {});
   }
 
+  private hidden(): string[] {
+    return this.settings.get<string[]>("vm.hiddenHosts", []);
+  }
+
   list(): Host[] {
     const prefs = this.prefs();
-    const seen = new Set<string>();
+    const seen = new Set<string>(this.hidden());
     const all = [...this.sources.vms(), ...this.added(), ...this.sources.ssh()];
     return all
       .filter((h) => (seen.has(h.id) ? false : (seen.add(h.id), true)))
@@ -185,5 +203,17 @@ export class HostStore {
   /** Only app-added hosts can be removed here; ssh config entries are the user's file, VMs go with `blackhole down`. */
   remove(id: string): void {
     this.settings.set("vm.hosts", this.added().filter((x) => x.id !== id));
+  }
+
+  /** Off the list: an app-added host is removed, an ~/.ssh/config one hidden (the file is left alone).
+   *  Records of `blackhole up` are dropped by the harness itself (`blackhole down NAME --forget`). */
+  forget(id: string): void {
+    const h = this.get(id);
+    if (h.source === "app") this.remove(id);
+    else if (h.source === "ssh-config") this.settings.set("vm.hiddenHosts", [...this.hidden().filter((x) => x !== id), id]);
+    else throw new Error(`${h.label} is a blackhole record; forget it with blackhole down ${h.label} --forget`);
+    const prefs = this.prefs();
+    delete prefs[id];
+    this.settings.set("vm.hostPrefs", prefs);
   }
 }

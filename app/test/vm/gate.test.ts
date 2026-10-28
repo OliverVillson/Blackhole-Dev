@@ -1,6 +1,7 @@
 // The confirm gate sits in main, in front of every action that costs money, whoever calls.
 import { describe, expect, it } from "vitest";
 import type { ConfirmRequest } from "../../src/vm/ctx";
+import { validateConfirmRequest } from "../../src/shared/gate";
 import { HostStore } from "../../src/vm/hosts";
 import { JobsService } from "../../src/vm/jobs";
 import type { Remote } from "../../src/vm/ssh";
@@ -57,6 +58,24 @@ describe("the confirm gate", () => {
     await s.jobs.copilotDown({ host: "bh-1", keepDisk: false } as { host: string });
     expect(s.cloudCalls.at(-1)).toEqual(["down", "bh-1", "--keep-disk"]);
     expect(s.asked[0].requestedBy).toBe("copilot");
+  });
+  it("asks vm.delete, a human-only action, before deleting; the copilot cannot delete at all", async () => {
+    const s = make(true);
+    await s.jobs.vmDown("vm:bh-1", { keepDisk: false });
+    expect(s.asked[0]).toMatchObject({ action: "vm.delete", estCost: "stops $8.50/h", requestedBy: "user" });
+    expect(s.cloudCalls.at(-1)).toEqual(["down", "bh-1"]);
+    await expect(s.jobs.vmDown("vm:bh-1", { keepDisk: false }, "copilot")).rejects.toThrow(/only you can delete/);
+    expect(s.asked).toHaveLength(1);
+    expect(() => validateConfirmRequest({ action: "vm.delete", title: "x", why: "y", requestedBy: "copilot" })).toThrow(/copilot cannot/);
+  });
+  it("forgets without a gate: a VM record through blackhole down --forget, an ssh config host by hiding it", async () => {
+    const s = make(false);
+    const r = await s.jobs.forgetHost("vm:bh-1");
+    expect(s.cloudCalls.at(-1)).toEqual(["down", "bh-1", "--forget"]);
+    expect(r.consoles.map((c) => c.provider)).toEqual(["nebius", "evroc", "lambda"]);
+    await s.jobs.forgetHost("ssh:box");
+    expect(s.jobs.hosts().map((h) => h.id)).toEqual(["vm:bh-1"]);
+    expect(s.asked).toEqual([]);
   });
   it("copies nothing back when the download is declined", async () => {
     const s = make(false);

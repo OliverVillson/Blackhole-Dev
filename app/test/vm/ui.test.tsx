@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { emptyState, parseLine, reduce } from "../../src/vm/events";
-import type { JobUpdate, LaunchPlan } from "../../src/vm/shared";
+import type { Host, JobUpdate, LaunchPlan } from "../../src/vm/shared";
 import { JobMonitor } from "../../src/vm/ui/JobMonitor";
 import { RunOnVm } from "../../src/vm/ui/RunOnVm";
 
@@ -59,5 +59,36 @@ describe("Job monitor", () => {
     expect(screen.getByText("heal 60%", { selector: "b" })).toBeTruthy();
     expect(screen.getByRole("img").getAttribute("aria-label")).toBe("Held-out KL from 0.0195 at step 8 to 0.0191 at step 16, 2 readings");
     expect(screen.getByText("Stop job")).toBeTruthy();
+  });
+});
+
+describe("deleting and forgetting machines", () => {
+  const vm = { id: "vm:bh-b300-ab12", label: "bh-b300-ab12", kind: "vm" as const, target: "blackhole@203.0.113.7", source: "blackhole-up" as const, provider: "nebius", gpu: "b300", state: "running" as const, ratePerHour: 6.1, currency: "$" };
+  it("right-click a cloud VM offers Stop, Delete VM and Forget; Delete goes to the gated down", async () => {
+    const { Machines } = await import("../../src/vm/ui/Machines");
+    const api = fakeApi({ hosts: vi.fn(async () => [vm]), testHost: vi.fn(async () => ({ ok: true, latencyMs: 1 })), down: vi.fn(async () => ({ approved: true, done: true })) });
+    render(<Machines api={api} openJob={() => {}} openTerminal={() => {}} />);
+    const row = await screen.findByText("bh-b300-ab12");
+    fireEvent.contextMenu(row);
+    expect(screen.getAllByRole("menuitem").map((b) => b.textContent)).toEqual(["Stop VM (keep disk)", "Delete VM…", "Forget machine…"]);
+    await act(async () => fireEvent.click(screen.getByRole("menuitem", { name: "Delete VM…" })));
+    expect(api.down).toHaveBeenCalledWith("vm:bh-b300-ab12", { keepDisk: false });
+  });
+  it("× forgets a host after one question and says where to delete the VM", async () => {
+    const hosts: Host[] = [host];
+    const api = fakeApi({
+      hosts: vi.fn(async () => hosts),
+      forgetHost: vi.fn(async () => (hosts.length = 0, { label: "oliver-b300", message: "forgot oliver-b300", consoles: [{ provider: "nebius", url: "https://console.nebius.com" }] })),
+    });
+    const own = { ...host, id: "app:oliver-reaper@204.12.178.65", label: "oliver-b300", source: "app" as const };
+    hosts[0] = own;
+    render(<RunOnVm api={api} recipe="/w/r.py" close={() => {}} onLaunched={() => {}} />);
+    const x = await screen.findByRole("button", { name: "Forget oliver-b300" });
+    await act(async () => fireEvent.click(x));
+    expect(screen.getByRole("alertdialog").textContent).toMatch(/keeps running and billing/);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Forget" })));
+    expect(api.forgetHost).toHaveBeenCalledWith("app:oliver-reaper@204.12.178.65");
+    expect(screen.getByRole("status").textContent).toMatch(/Forgot oliver-b300\..*still running and billing/);
+    expect((screen.getByRole("link", { name: "nebius" }) as HTMLAnchorElement).href).toBe("https://console.nebius.com/");
   });
 });
