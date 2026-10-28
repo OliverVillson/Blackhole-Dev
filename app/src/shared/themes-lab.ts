@@ -1,6 +1,6 @@
-// Experimental themes, numbered 01 to 20 for review. Beyond colours and fonts many carry effect
-// CSS ("&" is the theme's root selector) for glow, scanlines, grain, glass and the like; Dark Matter
-// also dims the editor away from the cursor (Spec.focus). Fonts: renderer/fonts-lab.ts.
+// Experimental themes. Beyond colours and fonts many carry effect CSS ("&" is the theme's root
+// selector) for glow, scanlines, grain, glass and the like; Dark Matter also dims the editor away
+// from the cursor (Spec.focus). Fonts: renderer/fonts-lab.ts.
 
 import type { Spec } from "./themes";
 
@@ -11,32 +11,11 @@ const SYNTAX = "& .monaco-editor .view-line span[class^=\"mtk\"]:not(.mtk1)";
 const GRID = "linear-gradient(rgba(255,255,255,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.09) 1px, transparent 1px), linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px)";
 const SEL_ROWS = "& .rc.sel, & .it.sel";
 const SEL_TEXT = (c: string) => `${SEL_ROWS} { color: ${c}; box-shadow: none; } & .rc.sel *, & .it.sel * { color: ${c} !important; }`;
-const THERMAL = "linear-gradient(90deg, #2a0f55, #7a1590, #e0287a, #ff7a1a, #ffd23f, #fffbe6) 1";
 
 export const LAB: Spec[] = [
   {
-    id: "spaghettification", name: "Spaghettification", group: "experimental",
-    blurb: "01 · Glitch: the colour channels pulled apart, magenta and cyan.",
-    bg: "#050507", chrome: "#0a0a0e", surface: "#0d0d12", surface2: "#16161d", sel: "#2a1030",
-    border: "#1c1c24", border2: "#2c2c38",
-    text: "#e8e8f0", textHi: "#ffffff", dim: "#7c7c8a",
-    accent: "#ff2e88", onAccent: "#0a0006", accent2: "#19f0ff", ok: "#3dff9a", bad: "#ff3b3b",
-    lineHl: "#0d0d12", gutter: "#3a3a48", gutterHi: "#19f0ff", caret: "#19f0ff",
-    syn: { kw: "#ff2e88", str: "#19f0ff", num: "#ffe600", com: "#555566", fn: "#ffffff", deco: "#b04dff", punc: "#8a8a99" },
-    mark: ["#3a0a24", "#ff2e88", "#ffffff", "#19f0ff", "#ffffff"], ring: "#19f0ff",
-    fonts: { display: "Space Grotesk", ui: "Space Grotesk", mono: "Space Mono" }, kwBold: true,
-    fx: `& .brand b { font-family: "Rubik Glitch"; font-weight: 400; text-shadow: -2px 0 #ff2e88, 2px 0 #19f0ff; }
-      & .hd, & .ptab.on, & .tab.on { text-shadow: -.7px 0 rgba(255,46,136,.75), .7px 0 rgba(25,240,255,.75); }
-      & .titlebar { box-shadow: 0 1px 0 #ff2e88, 0 2px 0 #19f0ff; position: relative; z-index: 2; }
-      & .status { box-shadow: 0 -1px 0 #19f0ff, 0 -2px 0 #ff2e88; }
-      & .btn.pri { box-shadow: -2px 0 0 #19f0ff; }
-      & .monaco-editor .mtkb { text-shadow: -1px 0 rgba(255,46,136,.55), 1px 0 rgba(25,240,255,.55); }
-      & .monaco-editor .view-overlays .current-line { background: linear-gradient(90deg, rgba(255,46,136,.16), rgba(25,240,255,.05) 60%, transparent) !important; }
-      ${OVER} mix-blend-mode: difference; opacity: .5; background: linear-gradient(#19f0ff, #19f0ff) 58% 44.6% / 34% 2px no-repeat, linear-gradient(#ff2e88, #ff2e88) 66% 44.9% / 22% 1px no-repeat, linear-gradient(#ff2e88, #ff2e88) 38% 92% / 20% 1px no-repeat; }`,
-  },
-  {
     id: "white-hole", name: "White Hole", group: "experimental", light: true,
-    blurb: "02 · Strictly 1-bit black and white; syntax by weight, slant and underline. The mark inverts.",
+    blurb: "Strictly 1-bit black and white; syntax by weight, slant and underline. The mark inverts.",
     bg: "#ffffff", chrome: "#ffffff", surface: "#ffffff", surface2: "#ffffff", sel: "#000000",
     border: "#000000", border2: "#000000",
     text: "#000000", textHi: "#000000", dim: "#000000",
@@ -62,7 +41,7 @@ export const LAB: Spec[] = [
   },
   {
     id: "hawking-radiation", name: "Hawking Radiation", group: "experimental",
-    blurb: "03 · Amber CRT: one hue, phosphor glow on every letter, scanlines and a curved-glass vignette.",
+    blurb: "Amber CRT: one hue, phosphor glow on every letter, scanlines and a curved-glass vignette.",
     bg: "#0c0700", chrome: "#110a00", surface: "#140c01", surface2: "#1f1404", sel: "#3a2606",
     border: "#2a1c05", border2: "#4a3209",
     text: "#ffbf47", textHi: "#ffd98a", dim: "#9a6a1c",
@@ -77,7 +56,7 @@ export const LAB: Spec[] = [
   },
   {
     id: "blueprint", name: "Blueprint", group: "experimental",
-    blurb: "04 · Engineering drawing: Prussian blue, white line work, a drafting grid, hand-lettered headings.",
+    blurb: "Engineering drawing: Prussian blue, white line work, a drafting grid, hand-lettered headings.",
     bg: "#0f3b84", chrome: "#0c3272", surface: "#0e367a", surface2: "#144594", sel: "#1d55ad",
     border: "#3f6bb3", border2: "#6f93cc",
     text: "#e8f0ff", textHi: "#ffffff", dim: "#a9c0e8",
@@ -93,28 +72,8 @@ export const LAB: Spec[] = [
       & .monaco-editor .view-overlays .current-line { outline: 1px dashed rgba(255,216,74,.7); outline-offset: -1px; }`,
   },
   {
-    id: "retrograde", name: "Retrograde", group: "experimental",
-    blurb: "05 · Synthwave: deep violet, neon pink and cyan that glow, a sunset status bar.",
-    bg: "#13072b", chrome: "#1b0b3a", surface: "#180a33", surface2: "#26104d", sel: "#3a1670",
-    border: "#2d1458", border2: "#4a1f86",
-    text: "#f3e6ff", textHi: "#ffffff", dim: "#a58ccc",
-    accent: "#ff2bd6", onAccent: "#1a0018", accent2: "#00f0ff", ok: "#3dffb5", bad: "#ff4d6d",
-    lineHl: "#1c0b3d", gutter: "#5a3a99", gutterHi: "#00f0ff", caret: "#00f0ff",
-    syn: { kw: "#ff2bd6", str: "#ffd166", num: "#ff8a3d", com: "#6f5a99", fn: "#00f0ff", deco: "#ff6ec7", punc: "#b9a3e3" },
-    mark: ["#3a1670", "#ff2bd6", "#ff8a3d", "#ffd166", "#ffffff"], ring: "#00f0ff",
-    vars: { "status-fg": "#1a0018", "status-line": "#ff2bd6" },
-    fonts: { display: "Orbitron", ui: "Exo 2", mono: "Fira Code" },
-    fx: `& .titlebar { background: linear-gradient(180deg, #2a0f5c, #1b0b3a); box-shadow: 0 1px 0 #ff2bd6; position: relative; z-index: 2; }
-      & .status { background: linear-gradient(90deg, #ff2bd6, #ff6a5e 55%, #ffb03a); font-weight: 600; }
-      ${SYNTAX} { text-shadow: 0 0 8px currentColor; }
-      & .brand b { text-shadow: 0 0 10px rgba(255,43,214,.8); }
-      & .btn.pri { box-shadow: 0 0 12px rgba(255,43,214,.6); }
-      & .panel { background-image: linear-gradient(180deg, transparent 30%, rgba(255,43,214,.13)), repeating-linear-gradient(90deg, rgba(255,43,214,.10) 0 1px, transparent 1px 48px); }
-      & .ab.on { color: #00f0ff; box-shadow: inset 2px 0 0 #00f0ff; filter: drop-shadow(0 0 4px #00f0ff); }`,
-  },
-  {
     id: "concrete", name: "Concrete", group: "experimental", light: true,
-    blurb: "06 · Neo-brutalist: hard black borders and offset shadows, safety yellow, square corners.",
+    blurb: "Neo-brutalist: hard black borders and offset shadows, safety yellow, square corners.",
     bg: "#f2f2ef", chrome: "#e4e4df", surface: "#ebebe7", surface2: "#ffffff", sel: "#ffe600",
     border: "#111111", border2: "#111111",
     text: "#111111", textHi: "#000000", dim: "#55554f",
@@ -133,27 +92,8 @@ export const LAB: Spec[] = [
       & .ab.on { color: #000; box-shadow: inset 4px 0 0 #ffe600; } & .crumbs .live, & .tone-warn { color: #a83200; font-weight: 700; }`,
   },
   {
-    id: "infrared", name: "Infrared", group: "experimental",
-    blurb: "07 · Thermal camera: comments run cold violet, functions burn white-hot.",
-    bg: "#07021a", chrome: "#0b0526", surface: "#0a0422", surface2: "#150a3a", sel: "#2a0f55",
-    border: "#1c0c44", border2: "#351a6e",
-    text: "#e6dcff", textHi: "#fff8e6", dim: "#8a77c4",
-    accent: "#ffd23f", onAccent: "#1a0800", accent2: "#ff3d7f", ok: "#7dff9a", bad: "#ff3d3d",
-    lineHl: "#12073a", gutter: "#4a3585", gutterHi: "#ffd23f", caret: "#fff6d6",
-    syn: { kw: "#e0287a", str: "#ffd23f", num: "#ff7a1a", com: "#5b3a9a", fn: "#fff6d6", deco: "#ff3d7f", punc: "#8a5fc4" },
-    mark: ["#2a0f55", "#e0287a", "#ff7a1a", "#ffd23f", "#fffbe6"], ring: "#fffbe6",
-    fonts: { display: "Michroma", ui: "Titillium Web", mono: "JetBrains Mono" },
-    fx: `& .titlebar { border-bottom: 2px solid; border-image: ${THERMAL}; }
-      & .status { border-top: 2px solid; border-image: ${THERMAL}; }
-      & .monaco-editor .view-overlays .current-line { background: linear-gradient(90deg, rgba(255,122,26,.22), rgba(224,40,122,.10) 35%, transparent 75%) !important; }
-      & .tab.on { box-shadow: inset 0 2px 0 #ffd23f; }
-      ${SEL_ROWS} { background: linear-gradient(90deg, #4a0f5c, #2a0f55); }
-      & .btn.pri { background: linear-gradient(90deg, #ff7a1a, #ffd23f); border-color: #ffd23f; }
-      & .brand b { font-size: 12px; font-weight: 400; } & .hd { font-size: 10px; }`,
-  },
-  {
     id: "overprint", name: "Overprint", group: "experimental", light: true,
-    blurb: "08 · Risograph duotone: pink and blue inks slightly out of register, paper grain.",
+    blurb: "Risograph duotone: pink and blue inks slightly out of register, paper grain.",
     bg: "#f5f2ec", chrome: "#ece8df", surface: "#efebe3", surface2: "#e4dfd4", sel: "#ffd6ea",
     border: "#d9d3c6", border2: "#a9b4dc",
     text: "#1f3a8a", textHi: "#142a6b", dim: "#56669f",
@@ -170,7 +110,7 @@ export const LAB: Spec[] = [
   },
   {
     id: "ultraviolet", name: "Ultraviolet", group: "experimental",
-    blurb: "09 · Blacklight poster: fluorescent chartreuse, pink and cyan that glow.",
+    blurb: "Blacklight poster: fluorescent chartreuse, pink and cyan that glow.",
     bg: "#0d0020", chrome: "#12002c", surface: "#110028", surface2: "#1d0442", sel: "#33066e",
     border: "#250952", border2: "#3e0f80",
     text: "#efe0ff", textHi: "#ffffff", dim: "#9a7fd0",
@@ -188,7 +128,7 @@ export const LAB: Spec[] = [
   },
   {
     id: "broadsheet", name: "Broadsheet", group: "experimental", light: true,
-    blurb: "10 · Newspaper: serif headlines and UI, typewriter code, double rules, one red spot colour.",
+    blurb: "Newspaper: serif headlines and UI, typewriter code, double rules, one red spot colour.",
     bg: "#f6f5f0", chrome: "#ebe9e2", surface: "#efede7", surface2: "#e4e1d8", sel: "#dcd8cc",
     border: "#cbc7bb", border2: "#1a1a1a",
     text: "#1a1a1a", textHi: "#000000", dim: "#625e55",
@@ -207,7 +147,7 @@ export const LAB: Spec[] = [
   },
   {
     id: "abyssal", name: "Abyssal", group: "experimental",
-    blurb: "11 · Deep sea: glowing teal and jellyfish magenta, light spots and drifting marine snow.",
+    blurb: "Deep sea: glowing teal and jellyfish magenta, light spots and drifting marine snow.",
     bg: "#010a12", chrome: "#020d17", surface: "#03111d", surface2: "#071a2a", sel: "#0b2b42",
     border: "#0a2134", border2: "#12344f",
     text: "#bfe9f2", textHi: "#eafcff", dim: "#5a93a8",
@@ -224,7 +164,7 @@ export const LAB: Spec[] = [
   },
   {
     id: "four-shades", name: "Four Shades", group: "experimental", light: true,
-    blurb: "12 · The four greens of the first handheld LCDs and nothing else. Pixel fonts.",
+    blurb: "The four greens of the first handheld LCDs and nothing else. Pixel fonts.",
     bg: "#9bbc0f", chrome: "#8bac0f", surface: "#9bbc0f", surface2: "#8bac0f", sel: "#0f380f",
     border: "#306230", border2: "#306230",
     text: "#0f380f", textHi: "#0f380f", dim: "#306230",
@@ -245,7 +185,7 @@ export const LAB: Spec[] = [
   },
   {
     id: "observatory", name: "Observatory", group: "experimental",
-    blurb: "13 · Red only, so night vision survives, the way astronomers read charts in the dark.",
+    blurb: "Red only, so night vision survives, the way astronomers read charts in the dark.",
     bg: "#050000", chrome: "#080000", surface: "#0a0101", surface2: "#140303", sel: "#2e0606",
     border: "#1e0404", border2: "#3a0909",
     text: "#e8402f", textHi: "#ff5a45", dim: "#b8301f",
@@ -257,26 +197,8 @@ export const LAB: Spec[] = [
     fx: `& .dot:not(.ok):not(.live) { background: transparent; box-shadow: inset 0 0 0 1.5px #b8301f; }`,
   },
   {
-    id: "caution", name: "Caution", group: "experimental", light: true,
-    blurb: "14 · Hazard yellow everywhere, black for anything you press, cut corners, hazard stripes.",
-    bg: "#fdf38a", chrome: "#fcee0a", surface: "#f7e600", surface2: "#fff9c2", sel: "#111111",
-    border: "#1a1a00", border2: "#1a1a00",
-    text: "#111100", textHi: "#000000", dim: "#5e5800",
-    accent: "#111111", onAccent: "#fcee0a", accent2: "#d4002f", ok: "#00813c", bad: "#d4002f",
-    lineHl: "#fbea55", gutter: "#8a8200", gutterHi: "#000000", caret: "#d4002f",
-    syn: { kw: "#c4002b", str: "#005a73", num: "#5a2ca0", com: "#6e6800", fn: "#000000", deco: "#c4002b", punc: "#3a3600" },
-    mark: ["#111111", "#111111", "#d4002f", "#fcee0a", "#fff9c2"], ring: "#111111",
-    vars: { "status-bg": "#111111", "status-fg": "#fcee0a", "status-line": "#111111" },
-    fonts: { display: "Rajdhani", ui: "Rajdhani", mono: "Azeret Mono" }, density: "regular", metrics: { ui: 13.5 }, kwBold: true,
-    fx: `${SEL_TEXT("#fcee0a")}
-      & .btn, & .chip { clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); border-radius: 0; }
-      & .tab.on { box-shadow: inset 0 3px 0 #d4002f; } & .hd { font-weight: 700; letter-spacing: .2em; }
-      & .activity { background: #111; } & .ab { color: #8a8200; } & .ab.on { color: #fcee0a; box-shadow: inset 3px 0 0 #fcee0a; }
-      & .status { border-top: 5px solid; border-image: repeating-linear-gradient(-45deg, #111 0 7px, #fcee0a 7px 14px) 5; }`,
-  },
-  {
     id: "aurora", name: "Aurora", group: "experimental",
-    blurb: "15 · Northern lights: green and violet ribbons over a blue-black night sky.",
+    blurb: "Northern lights: green and violet ribbons over a blue-black night sky.",
     bg: "#060a13", chrome: "#070c17", surface: "#08101c", surface2: "#0e1828", sel: "#15263d",
     border: "#111d2e", border2: "#1d2f48",
     text: "#d0dcef", textHi: "#f1f6ff", dim: "#6d7f9c",
@@ -293,7 +215,7 @@ export const LAB: Spec[] = [
   },
   {
     id: "bauhaus", name: "Bauhaus", group: "experimental", light: true,
-    blurb: "16 · Red, blue and yellow on cream, thick black rules, geometric type.",
+    blurb: "Red, blue and yellow on cream, thick black rules, geometric type.",
     bg: "#f3eee3", chrome: "#e9e2d3", surface: "#ece6d9", surface2: "#fffaf0", sel: "#f2c12e",
     border: "#1a1a1a", border2: "#1a1a1a",
     text: "#1a1a1a", textHi: "#000000", dim: "#5e5747",
@@ -313,7 +235,7 @@ export const LAB: Spec[] = [
   },
   {
     id: "dark-matter", name: "Dark Matter", group: "experimental",
-    blurb: "17 · Focus mode: only the code around the cursor is lit; everything else fades into the dark.",
+    blurb: "Focus mode: only the code around the cursor is lit; everything else fades into the dark.",
     bg: "#050506", chrome: "#050506", surface: "#050506", surface2: "#0d0d10", sel: "#18181e",
     border: "#111115", border2: "#1d1d24",
     text: "#c9c9d6", textHi: "#ffffff", dim: "#5e5e6a",
@@ -329,7 +251,7 @@ export const LAB: Spec[] = [
   },
   {
     id: "cryo", name: "Cryo", group: "experimental", light: true,
-    blurb: "18 · Frosted glass: translucent, blurred panels over soft ice-blue light.",
+    blurb: "Frosted glass: translucent, blurred panels over soft ice-blue light.",
     bg: "#f7fbff", chrome: "#eaf3fc", surface: "#eef5fd", surface2: "#ffffff", sel: "#d3e6fb",
     border: "#d2e2f2", border2: "#b5cde6",
     text: "#1d2b3a", textHi: "#0b1622", dim: "#56697e",
@@ -349,28 +271,8 @@ export const LAB: Spec[] = [
       & .btn.pri { box-shadow: 0 4px 12px rgba(26,124,255,.35); }`,
   },
   {
-    id: "wormhole", name: "Wormhole", group: "experimental",
-    blurb: "19 · Psychedelic: every token its own hue, rainbow brackets, a rainbow ring round the editor.",
-    bg: "#0b0520", chrome: "#0e0628", surface: "#0d0625", surface2: "#170b3a", sel: "#2a1366",
-    border: "#1e0f48", border2: "#33196f",
-    text: "#eae2ff", textHi: "#ffffff", dim: "#8f7fc4",
-    accent: "#ff5ec4", onAccent: "#1a0012", accent2: "#5ef0ff", ok: "#7cff6b", bad: "#ff5e5e",
-    lineHl: "#130933", gutter: "#3e2a7a", gutterHi: "#ffd23f", caret: "#ffd23f",
-    syn: { kw: "#ff5e8a", str: "#ffd23f", num: "#ff9f43", com: "#8576c4", fn: "#5ef0ff", deco: "#b26bff", punc: "#7cff6b" },
-    mark: ["#2a1366", "#b26bff", "#ff5ec4", "#ffd23f", "#5ef0ff"], ring: "#7cff6b",
-    editor: {
-      "editorBracketHighlight.foreground1": "#ff5e8a", "editorBracketHighlight.foreground2": "#ffd23f", "editorBracketHighlight.foreground3": "#5ef0ff",
-      "editorBracketHighlight.foreground4": "#7cff6b", "editorBracketHighlight.foreground5": "#b26bff", "editorBracketHighlight.foreground6": "#ff9f43",
-    },
-    fonts: { display: "Unbounded", ui: "Figtree", mono: "Victor Mono" }, kwBold: true,
-    fx: `& .brand b { font-size: 12px; background: linear-gradient(90deg, #ff5e8a, #ff9f43, #ffd23f, #7cff6b, #5ef0ff, #b26bff); -webkit-background-clip: text; background-clip: text; color: transparent; }
-      & .brand b span { color: transparent; }
-      & .group.active { border: 2px solid transparent; background: linear-gradient(var(--void), var(--void)) padding-box, conic-gradient(from 90deg, #ff5e8a, #ff9f43, #ffd23f, #7cff6b, #5ef0ff, #b26bff, #ff5e8a) border-box; }
-      & .btn.pri { background: linear-gradient(90deg, #ff5ec4, #ffd23f); border-color: transparent; }`,
-  },
-  {
     id: "pulsar", name: "Pulsar", group: "experimental",
-    blurb: "20 · Maximum contrast: black, white, yellow and cyan, 2px outlines, a yellow focus ring.",
+    blurb: "Maximum contrast: black, white, yellow and cyan, 2px outlines, a yellow focus ring.",
     bg: "#000000", chrome: "#000000", surface: "#000000", surface2: "#141414", sel: "#ffff00",
     border: "#9a9a9a", border2: "#ffffff",
     text: "#ffffff", textHi: "#ffffff", dim: "#d6d6d6",
