@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { HelperClient, RpcError } from "../src/main/helper";
 
@@ -48,5 +49,19 @@ describe("I1 helper client", () => {
     await expect(c.start()).rejects.toThrow();
     await new Promise((r) => setTimeout(r, 50));
     expect(c.status().state).toBe("missing");
+  });
+  it("reads a function env at every start (the Hugging Face token from Settings)", async () => {
+    let token = "hf_one";
+    const seen: (string | undefined)[] = [];
+    const spawnFn = ((cmd: string, args: string[], o: any) => {
+      seen.push(o.env.HF_TOKEN);
+      return spawn(cmd, args, o);
+    }) as typeof spawn;
+    const c = new HelperClient({ python: () => "python3", args: [FAKE], cwd: __dirname, init, env: () => ({ HF_TOKEN: token }), spawnFn });
+    await c.start();
+    token = "hf_two";
+    await c.restart();
+    expect(seen).toEqual(["hf_one", "hf_two"]);
+    await c.stop();
   });
 });

@@ -40,6 +40,18 @@ export class Secrets {
     return this.cipher.decryptString(Buffer.from(v, "base64"));
   }
 
+  /** get() without the promise, for reads at process spawn time. */
+  getSync(name: string): string | null {
+    this.check(name);
+    const v = this.load()[name];
+    if (!v) return null;
+    try {
+      return this.cipher.decryptString(Buffer.from(v, "base64"));
+    } catch {
+      return null;
+    }
+  }
+
   async set(name: string, value: string): Promise<void> {
     this.check(name);
     if (!this.cipher.isEncryptionAvailable()) throw new Error("Keychain encryption is not available");

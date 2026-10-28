@@ -347,7 +347,6 @@ class Helper:
 
     # ------------------------------------------------------------------ anatomy
     def anatomy_open(self, p: dict) -> dict:
-        from blackhole_dev.model import AnatomyError
         model = p.get("model")
         if not model:
             raise RpcError(-32602, "model is required")
@@ -357,10 +356,8 @@ class Helper:
         self.progress(f"opening {model}", 0.1)
         try:
             self.model = blackhole_dev.open(q if q.is_dir() else model)
-        except (AnatomyError, FileNotFoundError, OSError) as e:
-            raise RpcError(MODEL_NOT_FOUND, f"cannot open {model}: {e}") from None
         except Exception as e:  # noqa: BLE001  hub errors and friends
-            raise RpcError(MODEL_NOT_FOUND, f"cannot open {model}: {type(e).__name__}: {e}") from None
+            raise RpcError(MODEL_NOT_FOUND, open_error(model, e)) from None
         m = self.model
         return {"id": m.id, "name": m.id.rstrip("/").split("/")[-1], "layers": len(m.layers),
                 "kind": "moe" if m.info.experts else "dense", "summary": m.summary()}
@@ -499,12 +496,11 @@ class Helper:
         key = str(q)
         if self.amodel and self.amodel[0] == key:
             return self.amodel[1]
-        from blackhole_dev.model import AnatomyError
         self.progress(f"opening {want}", 0.05)
         try:
             m = blackhole_dev.open(q if q.is_dir() else want)
-        except (AnatomyError, FileNotFoundError, OSError) as e:
-            raise RpcError(MODEL_NOT_FOUND, f"cannot open {want}: {e}") from None
+        except Exception as e:  # noqa: BLE001
+            raise RpcError(MODEL_NOT_FOUND, open_error(want, e)) from None
         self.amodel = (key, m)
         return m
 
@@ -593,6 +589,21 @@ class Helper:
 
 
 # ---------------------------------------------------------------------- helpers
+
+
+HUB_DENIED = re.compile(r"\b40[13] Client Error|Repository Not Found|gated repo|Invalid username or password", re.I)
+
+
+def open_error(model: str, e: Exception) -> str:
+    """One line for a model that would not open. Hugging Face answers 401 for gated, private and
+    missing repos alike when there is no token, then appends a page of boilerplate; say what to do."""
+    name = type(e).__name__
+    if name in ("GatedRepoError", "RepositoryNotFoundError") or HUB_DENIED.search(str(e)):
+        return (f"cannot open {model}: this repo is gated or private on Hugging Face, or the id is wrong. "
+                "Check the id, accept the model's licence on huggingface.co, and add a Hugging Face token in Settings")
+    if isinstance(e, (FileNotFoundError, OSError)) or name == "AnatomyError":
+        return f"cannot open {model}: {e}"
+    return f"cannot open {model}: {name}: {e}"
 
 
 def to_query(path: str) -> str:

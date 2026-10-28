@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
-import { renderCopilotPanel } from "../../src/copilot/panel";
+import { describe, expect, it, vi } from "vitest";
+import { fillError, renderCopilotPanel } from "../../src/copilot/panel";
 import { CopilotSession } from "../../src/copilot/session";
 import { FakeEditor } from "./fakeEditor";
 
@@ -186,5 +186,32 @@ describe("copilot panel code boxes", () => {
     (edit.querySelector(".cp-copy") as HTMLButtonElement).click();
     await new Promise((r) => setTimeout(r, 0));
     expect(copied).toBe("1.1.0");
+  });
+});
+
+describe("error rows", () => {
+  const HF = "open model: cannot open recursive-si/flint-40b: 401 Client Error. (Request ID: Root=1-6ae2) Repository Not Found for url: https://huggingface.co/recursive-si/flint-40b/resolve/main/config.json. Please make sure ...\nInvalid username or password.";
+
+  it("shows one line, with Details and Copy holding the full text", async () => {
+    const el = fillError(document.createElement("div"), HF);
+    expect(el.querySelector(".cp-ehead")!.textContent).toBe("open model: cannot open recursive-si/flint-40b: this repo is gated or private on Hugging Face, or the id is wrong. Add a Hugging Face token in Settings");
+    const full = el.querySelector(".cp-efull")!;
+    expect(full.textContent).toBe(HF);
+    expect(full.classList.contains("on")).toBe(false);
+    const [details, copy] = [...el.querySelectorAll<HTMLButtonElement>(".cp-emore button")];
+    details.click();
+    expect(full.classList.contains("on")).toBe(true);
+    expect(details.textContent).toBe("Hide details");
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    copy.click();
+    expect(writeText).toHaveBeenCalledWith(HF);
+  });
+
+  it("keeps a short error plain, and redraws when a row is reused", () => {
+    const el = fillError(document.createElement("div"), HF);
+    fillError(el, "lint recipe: file not found");
+    expect(el.textContent).toBe("lint recipe: file not found");
+    expect(el.querySelector(".cp-emore")).toBeNull();
   });
 });

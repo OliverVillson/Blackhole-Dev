@@ -7,6 +7,7 @@ import type { ClaudeCodeStatus } from "../llm/claudeCode";
 import { highlight } from "../chat/ui/highlight";
 import { escapeHtml, renderMarkdown } from "../chat/ui/markdown";
 import type { Effort } from "../llm/types";
+import { splitError } from "../shared/errors";
 import type { KeyStatus, ProviderSettings } from "./main";
 import type { CopilotEvent, CopilotSession, CopilotState } from "./session";
 
@@ -62,7 +63,7 @@ const CSS = `
 .cp .t-num,.cp .t-lit{color:var(--syn-num,#ff5a45)}.cp .t-lit{font-weight:600}.cp .t-com{color:var(--syn-com,#8a5e48);font-style:italic}
 .cp .t-fn{color:var(--syn-fn,#fff6ea);font-weight:600}.cp .t-type{color:var(--syn-type,#ffae42)}.cp .t-deco{color:var(--syn-deco,#ff9a3c)}.cp .t-op{color:var(--syn-op,#e2452f)}
 .cp-think{font-size:12px;color:var(--dim);font-style:italic}
-.cp-tool{font:12px var(--font-mono);border:1px solid var(--line2);border-radius:5px;padding:6px 10px;background:var(--bg1);color:var(--dim)}
+.cp-tool{font:12px/18px var(--font-mono);border:1px solid var(--line2);border-radius:5px;padding:6px 10px;background:var(--bg1);color:var(--dim);min-width:0;overflow-wrap:anywhere;white-space:pre-wrap}
 .cp-tool.ok::before{content:"✓ ";color:var(--ok)}
 .cp-tool.error{border-color:var(--redshift);color:var(--text)}
 .cp-tool.error::before{content:"✕ ";color:var(--redshift)}
@@ -70,7 +71,12 @@ const CSS = `
 .cp-tool.waiting{border-color:var(--ember);color:var(--text)}
 .cp-edit{font:12px var(--font-mono);border:1px solid var(--flare);border-radius:5px;padding:6px 10px;color:var(--text)}
 .cp-edit b{color:var(--flare);font-weight:600}
-.cp-err{border:1px solid var(--redshift);border-radius:5px;padding:6px 10px;color:var(--text)}
+.cp-err{border:1px solid var(--redshift);border-radius:5px;padding:6px 10px;color:var(--text);min-width:0;line-height:18px;overflow-wrap:anywhere;white-space:pre-wrap}
+.cp-emore{display:flex;gap:6px;margin-top:6px;white-space:normal}
+.cp-emore button{height:20px;padding:0 8px;border:1px solid var(--ash);border-radius:3px;background:none;color:var(--dim);font:500 11px var(--font-ui);cursor:pointer}
+.cp-emore button:hover{border-color:var(--ember);color:var(--photon)}
+.cp .cp-efull{display:none;margin:6px 0 0;padding:6px 8px;max-height:180px;overflow:auto;border-top:1px solid var(--line2);font:11px/16px var(--font-mono);color:var(--dim);white-space:pre-wrap;overflow-wrap:anywhere}
+.cp .cp-efull.on{display:block}
 .cp-ft{padding:12px 16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
 .cp-ft label{font-size:12px;color:var(--dim)}
 .cp-ft textarea{resize:none;background:var(--void);color:var(--text);border:1px solid var(--edge,#3a1206);border-radius:6px;padding:8px 10px;font:13px var(--font-ui)}
@@ -113,6 +119,31 @@ function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, 
   for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
   if (text !== undefined) e.textContent = text;
   return e;
+}
+
+/** An error row: one readable line, then "Details" (the full text, scrolling) and "Copy" (the full
+ *  text) when the original says more, e.g. Hugging Face's 401 page. */
+export function fillError(el: HTMLElement, text: string): HTMLElement {
+  const { head, full, more } = splitError(text);
+  el.replaceChildren(h("span", { class: "cp-ehead" }, head));
+  el.title = "";
+  if (!more) return el;
+  const pre = h("pre", { class: "cp-efull" }, full);
+  const toggle = h("button", { type: "button", "aria-expanded": "false" }, "Details");
+  toggle.onclick = () => {
+    const on = pre.classList.toggle("on");
+    toggle.textContent = on ? "Hide details" : "Details";
+    toggle.setAttribute("aria-expanded", String(on));
+  };
+  const copy = h("button", { type: "button" }, "Copy");
+  copy.onclick = () => void navigator.clipboard?.writeText(full).then(() => {
+    copy.textContent = "Copied";
+    setTimeout(() => (copy.textContent = "Copy"), 1200);
+  });
+  const row = h("div", { class: "cp-emore" });
+  row.append(toggle, copy);
+  el.append(row, pre);
+  return el;
 }
 
 export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void {
@@ -315,7 +346,8 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
           toolEls.set(e.id, t);
         }
         t.className = `cp-tool ${e.status}`;
-        t.textContent = e.summary;
+        if (e.status === "error") fillError(t, e.summary);
+        else t.textContent = e.summary;
         scroll();
         break;
       }
@@ -327,7 +359,7 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
         break;
       }
       case "error":
-        add(h("div", { class: "cp-err" }, e.message));
+        add(fillError(h("div", { class: "cp-err" }), e.message));
         break;
       case "usage":
         break;

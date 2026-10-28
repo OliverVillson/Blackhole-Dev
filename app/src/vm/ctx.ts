@@ -49,7 +49,8 @@ export interface VmRendererContext {
     onData(id: string, cb: (d: string) => void): void;
     dispose(id: string): void;
   };
-  workspace: { activeFile(): string | null; onActiveFile(cb: (f: string | null) => void): void; open(path: string, line?: number): void; listRecipes(): Promise<string[]> };
+  workspace: { activeFile(): string | null; onActiveFile(cb: (f: string | null) => void): void; open(path: string, line?: number): void; listRecipes(): Promise<string[]>; saveForRun?(recipe: string | null): Promise<string[]> };
+  notify?(message: string, kind?: "info" | "warn" | "error"): void;
 }
 
 /** I1 shapes this module reads (WS2: ws2-recipe.md I2b). */

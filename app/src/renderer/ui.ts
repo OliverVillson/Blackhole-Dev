@@ -2,6 +2,7 @@
 
 import { h } from "./dom";
 import type { Dispose } from "../shared/ext";
+import { splitError } from "../shared/errors";
 
 export function showModal(m: { title: string; width?: number; render(el: HTMLElement, close: () => void): void | Dispose }): { close(): void } {
   const body = h("div", { class: "modal-body" });
@@ -66,9 +67,26 @@ export function toast(message: string, kind: "info" | "warn" | "error" = "info")
     toastBox = h("div", { class: "toasts", "aria-live": "polite" });
     document.body.append(toastBox);
   }
-  const t = h("div", { class: `toast ${kind}`, role: kind === "error" ? "alert" : "status" }, message);
+  // Long errors (Hugging Face's 401 page, tracebacks) show one line; Details and Copy have the rest.
+  const e = splitError(message);
+  const t = h("div", { class: `toast ${kind}`, role: kind === "error" ? "alert" : "status" }, h("div", null, e.head));
+  let timer = setTimeout(() => t.remove(), kind === "error" ? 9000 : 5000);
+  if (e.more) {
+    const full = h("pre", { class: "toast-full" }, e.full);
+    const details = h("button", { class: "btn sm", onclick: () => {
+      clearTimeout(timer);
+      details.textContent = full.classList.toggle("on") ? "Hide details" : "Details";
+    } }, "Details");
+    const copy = h("button", { class: "btn sm", onclick: () => {
+      clearTimeout(timer);
+      void navigator.clipboard?.writeText(e.full).then(() => (copy.textContent = "Copied"));
+    } }, "Copy");
+    const close = h("button", { class: "btn sm", onclick: () => t.remove() }, "Close");
+    t.append(h("div", { class: "toast-row" }, details, copy, close), full);
+    t.addEventListener("mouseenter", () => clearTimeout(timer));
+    t.addEventListener("mouseleave", () => { if (!full.classList.contains("on")) timer = setTimeout(() => t.remove(), 4000); });
+  }
   toastBox.append(t);
-  setTimeout(() => t.remove(), kind === "error" ? 9000 : 5000);
 }
 
 export function prompt(title: string, label: string, value = "", okLabel = "OK"): Promise<string | null> {

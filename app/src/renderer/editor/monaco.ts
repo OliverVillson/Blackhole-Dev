@@ -245,6 +245,11 @@ export class EditorManager {
     return !!b && !b.readonly && (b.isNew || b.model.getAlternativeVersionId() !== b.saved);
   }
 
+  /** Paths of open buffers with unsaved changes. */
+  dirtyPaths(): string[] {
+    return [...this.buffers.keys()].filter((p) => this.isDirty(p));
+  }
+
   async save(path: string): Promise<void> {
     const b = this.buffers.get(path);
     if (!b || b.readonly) return;
