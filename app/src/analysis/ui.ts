@@ -281,7 +281,8 @@ export function renderTab(root: HTMLElement, ctx: RendererContext, store: Analys
   const showEstimate = async () => {
     try {
       const e = await ctx.invoke<Estimate>(CH.estimate, req());
-      est.textContent = e.needs === "none" ? "Reads files, not weights." : e.needs === "headers" ? "Headers only: reads no weights." :
+      est.textContent = e.noModel ? "Pick a model (Analysis > Model, or open one in Anatomy) to see what this reads." :
+        e.needs === "none" ? "Reads files, not weights." : e.needs === "headers" ? "Headers only: reads no weights." :
         e.known ? `${e.remote ? "Downloads" : "Reads"} ~${fmtBytes(e.bytes)} of weights, ${fmtSeconds(e.seconds)}.` :
           "This script does not say what it reads: it runs under your read limit and asks before passing it.";
       return e;

@@ -53,7 +53,7 @@ export interface Report {
   model: string | null;
 }
 
-export interface Estimate { bytes: number | null; known: boolean; remote: boolean; seconds: number | null; needs: string; model: ModelBrief | null }
+export interface Estimate { bytes: number | null; known: boolean; remote: boolean; seconds: number | null; needs: string; model: ModelBrief | null; noModel?: boolean }
 
 /** What to run: a named analysis, or a script file (path, with the editor's unsaved text). */
 export interface RunRequest {

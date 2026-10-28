@@ -15,6 +15,9 @@ const app = await electron.launch({
   env: { ...process.env, HOME: home, BLACKHOLE_DEV_HELPER: join(here, "../fixtures/fake_helper.py"), BLACKHOLE_DEV_NO_UPDATE: "1" },
 });
 const errors = [];
+let mainOut = "";
+app.process().stdout?.on("data", (d) => (mainOut += d));
+app.process().stderr?.on("data", (d) => (mainOut += d));
 const win = await app.firstWindow();
 win.on("pageerror", (e) => errors.push(String(e)));
 win.on("console", (m) => m.type() === "error" && errors.push(m.text()));
@@ -240,7 +243,14 @@ await win.waitForFunction(() => window.__shell);
 assert((await bg("body")) === "rgb(255, 255, 255)", "the chosen theme is remembered");
 await win.evaluate(() => window.__shell.executeCommand("theme.singularity"));
 assert((await bg("body")) === "rgb(0, 0, 0)", "Theme: Singularity from the palette switches back");
+// "No model open" is an answer, not an error: no stack in the terminal, and a plain message
+// for any panel that does call through.
+const noModel = await win.evaluate(() => window.bh.invoke("analysis:estimate", { name: "layer-stats" }));
+assert(noModel.noModel === true, "an estimate with no model open answers noModel");
+const rejected = await win.evaluate(() => window.bh.invoke("no-such:channel").then(() => "", (e) => e.message));
+assert(rejected === "no handler for no-such:channel", `an invoke error reaches the renderer as its bare message (got ${rejected})`);
 await app.close();
+assert(!mainOut.includes("Error occurred in handler"), "main logs no unhandled bh:invoke errors");
 if (errors.length) {
   console.error("renderer errors:\n" + errors.join("\n"));
   process.exit(1);

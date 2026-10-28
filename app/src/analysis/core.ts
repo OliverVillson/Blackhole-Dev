@@ -9,6 +9,7 @@
 import type { ConfirmRequest } from "../shared/gate";
 import { fmtBytes, fmtSeconds, type AnalysisSettings, type Estimate, type ForkRequest, type Report, type RunOutcome, type RunRequest } from "./shared";
 
+export const MODEL_NOT_FOUND = -32002;
 export const READ_BUDGET = -32004;
 export const RUN_TIMEOUT_MS = 30 * 60_000;
 
@@ -45,6 +46,17 @@ function ask(deps: Deps, req: RunRequest, est: Estimate | null, why: string, byt
     details,
     requestedBy: req.requestedBy ?? "user",
   });
+}
+
+/** The tab's "what will this read" line. With no model picked or open, that is an answer
+ *  (noModel), not an error: the tab draws on open, often before any model is. */
+export async function estimateAnalysis(deps: Deps, req: RunRequest): Promise<Estimate> {
+  try {
+    return await deps.call<Estimate>("analysis.estimate", { ...req, params: req.params ?? {} });
+  } catch (e) {
+    if ((e as { code?: number }).code !== MODEL_NOT_FOUND || req.model) throw e;
+    return { bytes: null, known: false, remote: false, seconds: null, needs: "weights", model: null, noModel: true };
+  }
 }
 
 export async function runAnalysis(deps: Deps, req: RunRequest): Promise<RunOutcome> {

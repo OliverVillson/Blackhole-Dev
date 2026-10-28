@@ -48,6 +48,12 @@ def lint(params):
     return text, problems
 
 
+class RpcErr(Exception):
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
 def handle(method, params):
     if method == "initialize":
         STATE["recipesDir"] = params.get("recipesDir")
@@ -135,6 +141,10 @@ def handle(method, params):
         with open(path, "w") as f:
             f.write(text)
         return {"path": path, "text": text}
+    if method == "analysis.estimate":
+        if not params.get("model"):
+            raise RpcErr(-32002, "open a model first (Analysis > Model, or anatomy.open)")
+        return {"bytes": 1000, "known": True, "remote": False, "seconds": 0, "needs": "weights", "model": None}
     if method == "crash":
         os._exit(3)
     raise KeyError(method)
@@ -151,6 +161,8 @@ def main():
         sys.stderr.write(f"fake helper: {msg['method']}\n")
         try:
             res = {"jsonrpc": "2.0", "id": msg["id"], "result": handle(msg["method"], msg.get("params") or {})}
+        except RpcErr as e:
+            res = {"jsonrpc": "2.0", "id": msg["id"], "error": {"code": e.code, "message": str(e)}}
         except KeyError as e:
             res = {"jsonrpc": "2.0", "id": msg["id"], "error": {"code": -32601, "message": f"method not found: {e}"}}
         sys.stdout.write(json.dumps(res) + "\n")
