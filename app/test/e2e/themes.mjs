@@ -1,5 +1,5 @@
 // Screenshot the main screen in every theme (for reviewing themes, not run in CI).
-// Run: npm run build && xvfb-run -a node test/e2e/themes.mjs <outdir>
+// Run: npm run build && xvfb-run -a node test/e2e/themes.mjs <outdir> [id,id,...]
 import { _electron as electron } from "playwright";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = process.argv[2] ?? join(here, "themes");
+const only = process.argv[3]?.split(",");
 const home = mkdtempSync(join(tmpdir(), "bhdev-home-"));
 const app = await electron.launch({
   executablePath: join(here, "../../node_modules/electron/dist/electron"),
@@ -29,10 +30,11 @@ await win.evaluate(() => {
   s.editor.view().editor.setSelection({ startLineNumber: 14, startColumn: 1, endLineNumber: 15, endColumn: 30 });
 });
 await win.click("nav.activity button[title='Copilot']");
-const ids = await win.evaluate(() => [...window.__shell.commands.keys()].filter((k) => k.startsWith("theme.")).map((k) => k.slice(6)));
+const ids = await win.evaluate(() => [...window.__shell.commands.keys()].filter((k) => k.startsWith("theme.")).map((k) => k.slice(6))).then((all) => only ?? all);
 for (const [i, id] of ids.entries()) {
   await win.evaluate((x) => window.__shell.executeCommand(`theme.${x}`), id);
-  await win.waitForTimeout(250);
+  await win.evaluate(() => document.fonts.ready);
+  await win.waitForTimeout(400);
   await win.screenshot({ path: join(out, `${String(i + 1).padStart(2, "0")}-${id}.png`) });
 }
 await app.close();

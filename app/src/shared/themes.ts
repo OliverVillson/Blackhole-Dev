@@ -10,12 +10,15 @@
 //   flare  secondary accent (links, notes)  photon brightest text
 // Pure data: main reads it too (window background), the renderer applies it (renderer/theme.ts).
 
+import { LAB } from "./themes-lab";
+
 export type Density = "compact" | "regular" | "roomy";
-export type ThemeGroup = "blackhole" | "comfort" | "greyscale" | "beige" | "classic";
+export type ThemeGroup = "blackhole" | "comfort" | "greyscale" | "beige" | "classic" | "experimental";
+export interface Metrics { ui: number; code: number; lh: number; row: number }
 
 interface Syntax { kw: string; str: string; num: string; com: string; fn: string; deco: string; punc: string; type?: string; key?: string; lit?: string; op?: string }
 
-interface Spec {
+export interface Spec {
   id: string;
   name: string;
   group: ThemeGroup;
@@ -33,7 +36,21 @@ interface Spec {
   hole?: string[];
   fonts?: { display: string; ui: string; mono: string };
   density?: Density;
+  /** Exact sizes when no density preset fits (pixel fonts). */
+  metrics?: Partial<Metrics>;
   kwBold?: boolean;
+  /** Monaco font styles per token kind ("bold", "italic", "underline"), for themes that mark syntax by style. */
+  styles?: Partial<Record<"kw" | "str" | "num" | "com" | "deco", string>>;
+  /** Token overrides applied after the derived ones (status bar colours and the like). */
+  vars?: Record<string, string>;
+  /** Extra Monaco colours (rainbow brackets). */
+  editor?: Record<string, string>;
+  /** Colour behind the hole art's shadow; defaults to black on light themes. */
+  holeShadow?: string | null;
+  /** Effects beyond colour, as CSS; "&" stands for this theme's root selector. */
+  fx?: string;
+  /** Dim every editor line except the few around the cursor. */
+  focus?: boolean;
 }
 
 export interface Theme {
@@ -46,6 +63,10 @@ export interface Theme {
   vars: Record<string, string>;
   fonts: { display: string; ui: string; mono: string };
   density: Density;
+  metrics: Metrics;
+  /** Effect CSS, already scoped to this theme (empty for most themes). */
+  fx: string;
+  focus: boolean;
   /** Monaco token colours and editor colours. */
   monaco: { rules: { token: string; foreground: string; fontStyle?: string }[]; colors: Record<string, string> };
   /** xterm colours. */
@@ -59,7 +80,7 @@ export interface Theme {
 
 export const HEAT = ["#4a0d02", "#9e1b07", "#d7261e", "#ff6a00", "#ffae42", "#f5efe6"];
 
-export const DENSITY: Record<Density, { ui: number; code: number; lh: number; row: number }> = {
+export const DENSITY: Record<Density, Metrics> = {
   compact: { ui: 12.5, code: 12.5, lh: 19, row: 23 },
   regular: { ui: 13, code: 13, lh: 21, row: 26 },
   roomy: { ui: 13.5, code: 13.5, lh: 22, row: 28 },
@@ -107,17 +128,23 @@ function make(s: Spec): Theme {
     "syn-com": syn.com, "syn-fn": syn.fn, "syn-type": syn.type, "syn-deco": syn.deco, "syn-op": syn.op, "syn-punc": syn.punc,
     "syn-kw-weight": s.kwBold ? "600" : "500",
     "mark-0": mark[0], "mark-1": mark[1], "mark-2": mark[2], "mark-3": mark[3], "mark-4": mark[4], "mark-ring": ring,
+    ...s.vars,
+  };
+  const st = s.styles ?? {};
+  const style = (k: keyof NonNullable<Spec["styles"]>, base?: string) => {
+    const f = [base, st[k]].filter(Boolean).join(" ");
+    return f ? { fontStyle: f } : {};
   };
   const h = (c: string) => c.replace("#", "").slice(0, 6);
   const monaco = {
     rules: [
       { token: "", foreground: h(s.text) },
-      { token: "keyword", foreground: h(syn.kw), ...(s.kwBold ? { fontStyle: "bold" } : {}) },
-      { token: "string", foreground: h(syn.str) },
+      { token: "keyword", foreground: h(syn.kw), ...style("kw", s.kwBold ? "bold" : undefined) },
+      { token: "string", foreground: h(syn.str), ...style("str") },
       { token: "string.escape", foreground: h(syn.num) },
-      { token: "comment", foreground: h(syn.com), fontStyle: "italic" },
-      { token: "number", foreground: h(syn.num) },
-      { token: "tag", foreground: h(syn.deco) },
+      { token: "comment", foreground: h(syn.com), ...style("com", "italic") },
+      { token: "number", foreground: h(syn.num), ...style("num") },
+      { token: "tag", foreground: h(syn.deco), ...style("deco") },
       { token: "delimiter", foreground: h(syn.punc) },
       { token: "type", foreground: h(syn.type) },
       { token: "identifier", foreground: h(s.text) },
@@ -166,6 +193,7 @@ function make(s: Spec): Theme {
       "list.activeSelectionBackground": s.sel,
       "list.hoverBackground": mix(s.surface, s.text, 0.06),
       "list.highlightForeground": s.accent,
+      ...s.editor,
     } as Record<string, string>,
   };
   const ansi = light
@@ -177,12 +205,14 @@ function make(s: Spec): Theme {
     black: light ? s.text : s.surface2, red: s.bad, green: s.ok, yellow: ansi.yellow, blue: ansi.blue, magenta: ansi.magenta, cyan: ansi.cyan, white: light ? s.dim : s.text,
     brightBlack: s.dim, brightRed: err, brightGreen: s.ok, brightYellow: ansi.yellow, brightBlue: ansi.blue, brightMagenta: ansi.magenta, brightCyan: ansi.cyan, brightWhite: s.textHi,
   };
+  const density = s.density ?? (light ? "roomy" : "regular");
   return {
     id: s.id, name: s.name, group: s.group, blurb: s.blurb, light, vars,
-    fonts: s.fonts ?? BRAND_FONTS, density: s.density ?? (light ? "roomy" : "regular"),
+    fonts: s.fonts ?? BRAND_FONTS, density, metrics: { ...DENSITY[density], ...s.metrics },
+    fx: (s.fx ?? "").replace(/&/g, `:root[data-theme="${s.id}"]`), focus: !!s.focus,
     monaco, terminal,
     hole: s.hole ?? (light ? HEAT : [mix(s.bg, mark[0], 0.6), ...mark]),
-    holeShadow: light ? "#000000" : null,
+    holeShadow: s.holeShadow !== undefined ? s.holeShadow : light ? "#000000" : null,
     swatch: [s.bg, s.surface, s.accent, syn.kw, syn.str, syn.fn],
   };
 }
@@ -411,7 +441,7 @@ const SPECS: Spec[] = [
   },
 ];
 
-export const THEMES: Theme[] = SPECS.map(make);
+export const THEMES: Theme[] = [...SPECS, ...LAB].map(make);
 export const DEFAULT_THEME = "singularity";
 
 export function themeById(id: string | null | undefined): Theme {

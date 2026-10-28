@@ -3,7 +3,7 @@
 // The id is cached in localStorage so the next launch (and the gate window) paints the right
 // colours before the settings round trip; settings.json ("ui.theme") stays the source of truth.
 
-import { THEMES, DENSITY, themeById, type Theme } from "../shared/themes";
+import { THEMES, themeById, type Theme } from "../shared/themes";
 import { THEME, pick } from "../shared/theme";
 
 const CACHE = "bh.theme";
@@ -31,7 +31,7 @@ export function applyTheme(id: string | null | undefined): Theme {
   const t = themeById(id);
   const root = document.documentElement;
   for (const [k, v] of Object.entries(t.vars)) root.style.setProperty(`--${k}`, v);
-  const d = DENSITY[t.density];
+  const d = t.metrics;
   root.style.setProperty("--font-display", family(t.fonts.display, "system-ui, sans-serif"));
   root.style.setProperty("--font-ui", family(t.fonts.ui, "system-ui, sans-serif"));
   root.style.setProperty("--font-mono", family(t.fonts.mono, "ui-monospace, Menlo, monospace"));
@@ -41,6 +41,13 @@ export function applyTheme(id: string | null | undefined): Theme {
   root.style.setProperty("--row-h", `${d.row}px`);
   root.style.colorScheme = t.light ? "light" : "dark";
   root.dataset.theme = t.id;
+  let fx = document.getElementById("bh-theme-fx");
+  if (!fx && t.fx) {
+    fx = document.createElement("style");
+    fx.id = "bh-theme-fx";
+    document.head.append(fx);
+  }
+  if (fx) fx.textContent = t.fx;
   Object.assign(THEME, pick(t.vars));
   try {
     localStorage.setItem(CACHE, t.id);
@@ -61,7 +68,7 @@ export function onTheme(cb: (t: Theme) => void): () => void {
 
 /** Monaco and xterm measure glyphs once; call after a font change once the faces are in. */
 export function fontsReady(t: Theme): Promise<void> {
-  const d = DENSITY[t.density];
+  const d = t.metrics;
   const faces = [`400 ${d.code}px "${t.fonts.mono}"`, `400 ${d.ui}px "${t.fonts.ui}"`, `500 11px "${t.fonts.display}"`];
   return Promise.all(faces.map((f) => document.fonts?.load(f).catch(() => undefined))).then(() => undefined);
 }
