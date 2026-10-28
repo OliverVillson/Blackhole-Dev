@@ -183,7 +183,7 @@ export const DEFAULT_SETTINGS = (home: string): ChatSettings => ({
     port: 8080,
     trustRemoteCode: true,
     // Measured on a 16 GB MacBook Air M5: one prompt at a time, 512-token prefill steps and a
-    // two-entry prompt cache keep a 9.8 GB model inside the 12 GB wired limit.
+    // two-entry prompt cache keep a 9.8 GB model inside the default GPU limit (no sysctl).
     promptConcurrency: 1,
     prefillStepSize: 512,
     promptCacheSize: 2,

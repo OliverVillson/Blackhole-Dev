@@ -175,7 +175,7 @@ export function renderChatTab(root: HTMLElement, store: ChatStore, tabState: Cha
             'div',
             {},
             h('b', {}, `The GPU may only wire ${cur} of memory; ${m.name} is ${formatBytes(m.sizeBytes)}.`),
-            h('div.bhc-sub', {}, `Raising the limit to ${(rec / 1024).toFixed(0)} GB keeps the model in GPU memory instead of paging. macOS asks for your password; it resets on reboot.`),
+            h('div.bhc-sub', {}, `It may run out of GPU memory on long prompts. Close other large apps or pick a smaller build. Optional: raise the limit to ${(rec / 1024).toFixed(0)} GB (macOS asks for your password; it resets on reboot).`),
           ),
           h('div.bhc-acts', {}, h('button.bhc-btn.sm', { onclick: () => store.run(async () => ((store.state.wired = await store.api.setWired(rec)), store.changed('wired'))) }, `Raise to ${(rec / 1024).toFixed(0)} GB`)),
         ),

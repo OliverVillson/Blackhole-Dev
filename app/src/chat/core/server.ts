@@ -13,7 +13,7 @@ const DIAGNOSES: { re: RegExp; error: string; hint: string }[] = [
   {
     re: /Insufficient Memory|OutOfMemory|out of memory|kIOGPUCommandBufferCallbackError/i,
     error: 'The GPU ran out of memory (Metal).',
-    hint: 'Raise the GPU wired limit, close other large apps, or set BLACKHOLE_HEX_PROMPT=matvec in the server environment for the low-memory HEX prompt path.',
+    hint: 'Close other large apps (browsers, Docker), lower the prefill step in Chat settings, or copy the latest flint_mlx.py from BlackHole-Harness into the model folder (it dequantizes prompts in small chunks).',
   },
   {
     re: /No module named ['"]?mlx_lm/i,
