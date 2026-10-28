@@ -277,9 +277,9 @@ export class JobsService {
       checks.push({ id: "ssh", label: "SSH", tone: "ok", detail: host.target });
       checks.push(p.pipeline
         ? { id: "pipeline", label: "Pipeline on VM", tone: "ok", detail: `blackhole_pipeline in ${p.venv}` }
-        : { id: "pipeline", label: "Pipeline on VM", tone: "bad", detail: "no venv with blackhole_pipeline (~/.blackhole/venv, ~/bh-venv). Install it with `blackhole up --host`, or set the venv for this machine" });
+        : { id: "pipeline", label: "Pipeline on VM", tone: "bad", detail: "no venv with blackhole_pipeline (~/.blackhole/venv, ~/bh-venv). Install it on the machine with `curl -fsSL https://blackholeharness.dev/install.sh | bash` (or `blackhole up --host`), or set the venv for this machine" });
       if (p.pipeline && !p.recipeFlag) {
-        checks.push({ id: "recipe-flag", label: "Pipeline takes recipes", tone: "bad", detail: "the harness on this machine predates `--recipe`; update it (git pull, then pip install -e) and check again" });
+        checks.push({ id: "recipe-flag", label: "Pipeline takes recipes", tone: "bad", detail: "the harness on this machine predates `--recipe`; update it with `curl -fsSL https://blackholeharness.dev/install.sh | bash` there and check again" });
       }
       if (!p.tmux) checks.push({ id: "pipeline", label: "tmux", tone: "bad", detail: "tmux is not installed (sudo apt install tmux)" });
       const needsDev = manifest && (manifest.runner === "core" || (manifest.functions?.length ?? 0) > 0);
