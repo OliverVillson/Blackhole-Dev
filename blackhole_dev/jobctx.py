@@ -289,6 +289,10 @@ def gates_failed(gates: list, metrics: dict) -> list[str]:
     return bad
 
 
+def _defines_functions(path: Path) -> bool:
+    return "@function" in path.read_text(encoding="utf-8", errors="ignore")
+
+
 def run(root: str | Path, stage: str) -> int:
     from blackhole_dev import functions as fns
     root = Path(root).resolve()
@@ -299,6 +303,9 @@ def run(root: str | Path, stage: str) -> int:
     fdir = root / "recipe" / "functions"
     for p in sorted(fdir.glob("*.py")) if fdir.is_dir() else []:
         fns.load(str(p))
+    rfile = root / "recipe" / "recipe.py"
+    if rfile.is_file() and _defines_functions(rfile):     # job functions written in the recipe file itself
+        fns.load(str(rfile))
     job = Job(root, stage)
     f = fns.get(name)
     job.emit("running", 0, f"{name} ({fns.LAYERS[f.layer]}{', ' + Path(f.path).name if f.path else ''})")
