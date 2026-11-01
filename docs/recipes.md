@@ -67,6 +67,15 @@ Every TUI catalog preset (qwen-mac-qhex, mac-qhex, reaq-codebook, ...) converts 
 user folder, then built-ins), calls it, emits the usual JSON events with `stage` = the stage id, and on success
 touches `<job>/reaper/.done/<id>`. This is how a forked stage (distil, qheal, bench, ...) replaces a `pipeline.*` step.
 
+Example job-function recipes: `recipes/examples/dense_to_smoe.py` (smoe-*) and `recipes/examples/task_preload.py`,
+the task map for dense models: `task-prompts` (task prompt set, held-out split, general contrast set, base-model
+answers), `task-trace` (per-layer FFN neuron contribution, head output norm, residual update, probe-layer feature),
+`task-predictor` (ridge regression from a prompt's probe feature to each FFN block's use; recall vs static and
+random), `task-preload` (hot share at `hot_format`, rest at `cold_format` or `off`, neurons permuted hot-first, model
+written with `blackhole-preload.json`) and `task-eval` (plan vs general-data plan, random, all-cold, per-prompt
+predictor and oracle: KL, top-1, answer NLL on held-out task and general prompts, size, speed). Files in
+`<job>/reaper/work/taskmap/`.
+
 A recipe is either "pipeline" (any mix of `pipeline.*` and `job.fn` stages, run in recipe order) or "core" (catalog
 ops such as `model.edit`, run by blackhole.core.runner). Mixing the two is v2.
 
