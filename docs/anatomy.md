@@ -269,6 +269,9 @@ recipe bundle or your functions folder replaces the built-in stage.
 | `mlx-export` | MLX folder: GPTQ or HEX experts, REAQ tiers, attention / head bits | mlx |
 | `qheal` | heal after quantization around the frozen low-bit experts | qheal |
 | `bench` | LiveCodeBench pass@1 + thinking budgets of any models (ported in full) | bench |
+| `kl-eval` | KL(base \|\| model) over the base's top-20 tokens, top-1 agreement, both perplexities, on held-out text | (none: runs in the function) |
+| `speed-bench` | time to first token, decode tok/s, throughput, peak memory: transformers here, or vLLM / mlx_lm.server / any OpenAI-compatible URL | (none) |
+| `external-bench` | runs another harness (SWE-bench Pro, lm-eval, your script) against a served copy of the model and reads its score | (none) |
 | `fp8-experts` | REAPer's fp8-expert folder | quant |
 | `package` | model cards, receipt, RESULTS.md | package |
 
