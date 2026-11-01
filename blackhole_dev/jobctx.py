@@ -312,7 +312,7 @@ def run(root: str | Path, stage: str) -> int:
     out = fns.call_job(job, name, **params)
     metrics = {k: v for k, v in (out or {}).items() if isinstance(v, (int, float, str, bool))} \
         if isinstance(out, dict) else {}
-    bad = gates_failed(spec.get("gates"), metrics)
+    bad = gates_failed(_subst(spec.get("gates") or [], inputs), metrics)   # a gate may use ${inputs.x}
     job.write(f"work/fn-{stage}.json", {"fn": name, "sha256": f.sha256, "params": params,
                                       "result": out if isinstance(out, dict) else None})
     if bad:
