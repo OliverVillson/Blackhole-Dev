@@ -171,9 +171,14 @@ def vm(tmp_path):
     (job / "recipe").mkdir(parents=True)
     raw = r.to_raw()
     raw["stage"][0].update(port=port, timeout_min=1, concurrency=2)
-    raw["stage"].append({**raw["stage"][0], "id": "stop_after", "port": _bench.free_port(), "keep_serving": 0})
+    raw["stage"].append({**raw["stage"][0], "id": "stop_after", "port": _bench.free_port(), "keep_serving": 0,
+                         "model": "packaged"})
     raw["stage"].append({**raw["stage"][0], "id": "oom", "port": _bench.free_port(), "keep_serving": 0,
                          "serve_args": "--fail", "model": str(models / "qwen-tiny-MLX-0GB-vllm")})
+    raw["stage"].append({**raw["stage"][0], "id": "final", "port": _bench.free_port(), "keep_serving": 0,
+                         "model": "final"})
+    plain = _folder(tmp_path / "plain-mlx", {"quantization": {"group_size": 64, "bits": 4}})
+    raw["stage"].append({**raw["stage"][0], "id": "plain_mlx", "model": str(plain)})
     (job / "recipe" / "recipe.json").write_text(json.dumps({"raw": raw}))
     (job / "config.json").write_text(json.dumps({
         "model": "Qwen/Qwen3-30B-A3B", "schema": raw["id"], "target": "", "purpose": "", "steps": [],
@@ -260,7 +265,21 @@ def test_clear_errors_without_a_gpu_or_for_plain_mlx(vm, tmp_path):
                        env=env, cwd=vm["cwd"], capture_output=True, text=True, timeout=300)
     if subprocess.run(["which", "nvidia-smi"], capture_output=True).returncode != 0:
         assert p.returncode != 0 and "needs an NVIDIA GPU" in p.stdout + p.stderr
-    plain = _folder(tmp_path / "plain-mlx", {"quantization": {"group_size": 64, "bits": 4}})
-    (vm["job"] / "receipt.json").write_text(json.dumps({"model": str(plain)}))
-    p, _ = _run(vm, "vm_test")
+    p, _ = _run(vm, "plain_mlx")
     assert p.returncode != 0 and "plain MLX folder" in p.stdout + p.stderr
+
+
+def test_final_prefers_the_hex_vllm_folder_and_serves_it_as_is(vm):
+    hexdir = _folder(vm["models"] / "qwen-tiny-hex-vllm", {"model_type": "qwen3_5_moe",
+                                                           "quantization_config": {"quant_method": "blackhole-hex"}})
+    work = vm["job"] / "reaper" / "work"
+    work.mkdir(parents=True, exist_ok=True)
+    (work / "hex-vllm.json").write_text(json.dumps({"out": str(hexdir)}))
+    for sid in ("final", "stop_after"):       # final, and packaged with a receipt.json naming the MLX build
+        p, evs = _run(vm, sid)
+        assert p.returncode == 0, p.stdout[-3000:] + p.stderr[-3000:]
+        res = json.loads((work / "harness-test.json").read_text())
+        assert res["model_dir"] == str(hexdir) and res["from"] == "final"
+        served = json.loads((vm["models"] / "served.txt").read_text().splitlines()[-1])
+        assert served["path"] == str(hexdir)
+    assert not (vm["models"] / "qwen-tiny-MLX-0GB-vllm").exists()       # nothing converted

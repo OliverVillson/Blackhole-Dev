@@ -1,7 +1,7 @@
 # Serve a packaged build on the GPU VM and try it out: the step after `package` in any recipe
 # (add `recipe.fn("harness-test")` at the end), or on its own with "model" pointed at a folder.
 #
-# harness-test (built-in, forkable) finds the build package wrote (<job>/receipt.json), converts
+# harness-test (built-in, forkable) finds the job's final build (a hex-vllm folder is served as it is), converts
 # an MLX HEX export once to <folder>-vllm for vLLM's blackhole-hex kernel (BlackHole-Harness
 # runtime), starts `vllm serve`, asks a few prompts and checks the answers, then measures decode
 # tok/s, time to the first token, throughput at `concurrency`, and weights / KV-cache / GPU
@@ -24,8 +24,9 @@ recipe = Recipe(
     meta={"stage": "bench"},
 )
 
-model = recipe.input("model", "text", default="packaged",
-                     help="packaged (what the package step wrote), int4, pruned, latest, or a folder")
+model = recipe.input("model", "text", default="final",
+                     help="final (the job's last build: hex-vllm folder, HEX MLX, int4, ...), packaged, int4, "
+                          "pruned, or a folder")
 keep_serving = recipe.input("keep_serving", "int", default=1, min=0, max=1,
                             help="1 leaves the server up on port 8000 to chat with; 0 stops it")
 min_ok = recipe.input("min_ok", "int", default=3, min=0, max=100,

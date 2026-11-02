@@ -60,31 +60,24 @@ def kind_of(p: Path) -> str:
 
 
 def find_build(job, model: str) -> tuple[str, Path, str]:
-    """(label, folder, where it came from) for model = "packaged" (what the package step names
-    in <job>/receipt.json, else the job's MLX folder, else the HEX / model folders in <job>/out,
-    else the latest model), a job model name (original, pruned, healed, int4, reaq, mlx,
-    latest), or a folder."""
-    if model not in ("", "packaged", "final", "package"):
-        label, p = _bench.resolve(job, model)
-        return label, p, "model"
-    try:
-        rec = job.bh.read("receipt.json") or {}
-    except Exception:  # noqa: BLE001
-        rec = {}
-    if rec.get("model") and (Path(rec["model"]) / "config.json").exists():
-        p = Path(rec["model"])
-        return p.name, p, "receipt.json"
-    mlx = job.mlx_dir
-    if mlx is not None and (mlx / "config.json").exists():
-        return mlx.name, mlx, "work/mlx.json"
-    out = Path(job.root) / "out"
-    cands = sorted((d for d in out.iterdir() if (d / "config.json").exists()), key=lambda d: d.name) if out.is_dir() else []
-    for want in ("mlx-hex", "vllm-hex", "hf"):
-        for d in cands:
-            if not d.name.endswith("-vllm") and kind_of(d) == want:
-                return d.name, d, "out/"
-    label, p = _bench.resolve(job, "latest")
-    return label, p, "latest model (nothing packaged yet)"
+    """(label, folder, where it came from). model = "final" is _bench.resolve's final artefact
+    for a vLLM run (the hex-vllm folder, else a HEX MLX export, else int4, healed, pruned,
+    original; a plain MLX export is skipped). "packaged" is the same, except that without a
+    hex-vllm folder the folder package names in <job>/receipt.json wins when vLLM can serve
+    it. Anything else: a job model name (int4, pruned, latest, ...) or a folder."""
+    if model in ("", "packaged", "package") and _bench.hex_vllm_dir(job) is None:
+        try:
+            rec = job.bh.read("receipt.json") or {}
+        except Exception:  # noqa: BLE001
+            rec = {}
+        p = Path(rec["model"]) if rec.get("model") else None
+        if p is not None and (p / "config.json").exists() and kind_of(p) != "mlx":
+            return p.name, p, "receipt.json"
+    if model in ("", "packaged", "package", "final"):
+        label, p = _bench.resolve(job, "final", mlx_ok=False)
+        return label, p, "final"
+    label, p = _bench.resolve(job, model)
+    return label, p, "model"
 
 
 def folder_gb(p: Path) -> float:
@@ -269,7 +262,7 @@ def tunnel_hint(port: int) -> str:
 
 
 @function("harness-test", per="job")
-def harness_test(job, model: str = "packaged", prompts: str = "", max_tokens: int = 512, think: int = 0,
+def harness_test(job, model: str = "final", prompts: str = "", max_tokens: int = 512, think: int = 0,
                  concurrency: int = 4, port: int = 8000, keep_serving: int = 1, max_model_len: int = 32768,
                  gpu_mem: float = 0.9, serve_args: str = "", verify: int = 1, url: str = "", served_model: str = "",
                  timeout_min: float = 30.0) -> dict:
@@ -278,9 +271,10 @@ def harness_test(job, model: str = "packaged", prompts: str = "", max_tokens: in
     their answers checked, single-stream decode tok/s, time to the first token, throughput
     at `concurrency`, weights / KV-cache / GPU memory, and the size on disk.
 
-    model          "packaged" (the folder package names in <job>/receipt.json, else the job's
-                   MLX folder, else what is in <job>/out), a job model name (int4, pruned, ...)
-                   or a folder. An MLX HEX export is converted once to <folder>-vllm next to it
+    model          "final" (the job's last build vLLM can serve: the hex-vllm folder, else a HEX
+                   MLX export, else int4, healed, pruned, original), "packaged" (the same, but
+                   the folder package names in receipt.json when there is no hex-vllm folder),
+                   a job model name (int4, pruned, ...) or a folder. An MLX HEX export is converted once to <folder>-vllm next to it
                    (verify = 1 also proves every layer equals the Mac's numbers).
     prompts        empty for the built-in smoke prompts, a .txt / .jsonl file, or one prompt per line
     think          1 lets a thinking model think (answers take longer; raise max_tokens)
