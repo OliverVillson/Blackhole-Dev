@@ -47,10 +47,11 @@ def quant_method(path: Path) -> str:
 
 
 def hex_vllm_dir(job) -> Path | None:
-    """The job's vLLM blackhole-hex folder, if a function wrote one: work/hex-vllm.json {"out"},
+    """The job's vLLM blackhole-hex folder, if one was written: work/hex-vllm.json {"out"} (the
+    hex-vllm function) or work/hexvllm.json (the pipeline stage),
     else the newest folder with quant_method "blackhole-hex" in the job's out/ folders."""
     try:
-        out = (job.read("work/hex-vllm.json") or {}).get("out")
+        out = (job.read("work/hex-vllm.json") or job.read("work/hexvllm.json") or {}).get("out")
     except Exception:  # noqa: BLE001
         out = None
     if out and (Path(out) / "config.json").exists():

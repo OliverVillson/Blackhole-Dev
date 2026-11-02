@@ -101,7 +101,10 @@ def test_final_picks_the_last_artefact(built):
     (job.root / "out" / hexdir.name).symlink_to(hexdir)
     assert _bench.resolve(job, "final", mlx_ok=False) == ("hex", hexdir.resolve())
     assert _bench.resolve(job, "hex")[1] == hexdir.resolve()
-    # or named by work/hex-vllm.json
+    # or named by the pipeline stage's work/hexvllm.json, or the function's work/hex-vllm.json
+    stage = _folder(tmp / "stage-HEX", {"quantization_config": {"quant_method": "blackhole-hex"}})
+    job.write("work/hexvllm.json", {"out": str(stage)})
+    assert _bench.resolve(job, "final")[1] == stage
     other = _folder(tmp / "elsewhere-HEX", {"quantization_config": {"quant_method": "blackhole-hex"}})
     job.write("work/hex-vllm.json", {"out": str(other)})
     assert _bench.resolve(job, "final")[1] == other
