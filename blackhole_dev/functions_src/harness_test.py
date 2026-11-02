@@ -103,7 +103,7 @@ def convert(job, src: Path, verify: bool) -> Path:
     <folder>-vllm.tmp and renamed only when the conversion (and the per-layer check) passed."""
     src = src.resolve()
     dst = src.with_name(src.name + "-vllm")
-    if (dst / "config.json").exists() and kind_of(dst) == "vllm-hex":
+    if (dst / "config.json").exists() and kind_of(dst) == "vllm-hex" and (not verify or (dst / ".verified").exists()):
         job.log(f"harness-test: reusing the vLLM copy {dst}")
         return dst
     py = _runtime_python()
@@ -131,6 +131,8 @@ def convert(job, src: Path, verify: bool) -> Path:
                            f"full log: {logf}\n{tail}")
     shutil.rmtree(dst, ignore_errors=True)
     tmp.rename(dst)
+    if verify:      # the marker harness/scripts/swebench-pro.sh checks before it reuses the folder
+        (dst / ".verified").write_text(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()) + "\n")
     return dst
 
 
