@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { HostStore } from "../../src/vm/hosts";
-import { baseModelCheck, DEFAULT_VENV, JobsService, PLAN_TIMEOUT_MS, sha256File } from "../../src/vm/jobs";
+import { baseModelCheck, dockerCheck, DEFAULT_VENV, JobsService, PLAN_TIMEOUT_MS, sha256File } from "../../src/vm/jobs";
 import type { Probe } from "../../src/vm/shared";
 
 const probe = (o: Partial<Probe> = {}): Probe => ({
@@ -125,5 +125,30 @@ describe("base model row", () => {
   it("warns when it could not tell and the VM has no token", () => {
     expect(baseModelCheck(m, undefined, probe()).tone).toBe("warn");
     expect(baseModelCheck(m, undefined, probe({ hfToken: true })).tone).toBe("info");
+  });
+});
+
+describe("Docker row for SWE-bench Pro", () => {
+  const d = (o: Partial<NonNullable<Probe["docker"]>>) => probe({ docker: { installed: true, usable: true, inGroup: true, sudo: false, freeGb: 900, ...o } });
+  it("is ok when docker works and there is room", () => {
+    expect(dockerCheck(d({})).tone).toBe("ok");
+  });
+  it("lets the script set docker up when sudo needs no password", () => {
+    const c = dockerCheck(d({ installed: false, usable: false, inGroup: false, sudo: true }));
+    expect(c.tone).toBe("info");
+    expect(c.detail).toContain("installs it");
+    expect(dockerCheck(d({ usable: false, inGroup: false, sudo: true })).detail).toContain("docker group");
+  });
+  it("blocks the run without docker and without sudo, with the command to run", () => {
+    const c = dockerCheck(d({ installed: false, usable: false, sudo: false }));
+    expect(c.tone).toBe("bad");
+    expect(c.detail).toContain("get.docker.com");
+  });
+  it("blocks below 60 GB and warns below 150 GB", () => {
+    expect(dockerCheck(d({ freeGb: 40 })).tone).toBe("bad");
+    expect(dockerCheck(d({ freeGb: 100 })).tone).toBe("warn");
+  });
+  it("warns when the probe predates the docker field", () => {
+    expect(dockerCheck(probe()).tone).toBe("warn");
   });
 });
