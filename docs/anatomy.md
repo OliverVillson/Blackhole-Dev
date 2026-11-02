@@ -274,6 +274,7 @@ recipe bundle or your functions folder replaces the built-in stage.
 | `external-bench` | runs another harness (SWE-bench Pro, lm-eval, your script) against a served copy of the model and reads its score | (none) |
 | `fp8-experts` | REAPer's fp8-expert folder | quant |
 | `package` | model cards, receipt, RESULTS.md | package |
+| `hf-publish` | the finished model ready for the Hugging Face Hub in `<job>/publish/<name>/` (hardlinked weights, Hub model card, LICENSE, config without local paths), checked shard by shard, and the upload commands in `<job>/publish/COMMANDS.txt`; uploads only with `upload=1` and a token. The upload itself: `python -m blackhole_dev.hfpub --job JOB --upload` | (none) |
 
 ```python
 @function("distil-twice", per="job")
