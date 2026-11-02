@@ -125,7 +125,7 @@ describe.skipIf(!live)("copilot one-shot (live)", () => {
           }
         }
         if (method === "recipe.plan" && !params.model) {
-          const text = fs.readFileSync(params.path, "utf8");
+          const text: string = params.text ?? fs.readFileSync(params.path, "utf8");
           const base = /base\s*=\s*["']([^"']+)["']/.exec(text)?.[1];
           if (base && hub[base]) params = { ...params, model: hub[base] };
         }
