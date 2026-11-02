@@ -40,6 +40,31 @@ RECIPE_ERROR, MODEL_NOT_FOUND, CANCELLED, READ_BUDGET = -32001, -32002, -32003, 
 FAST = {"lang.complete", "lang.signatures", "lang.hover"}
 
 
+_HUB_ID = re.compile(r"[\w.-]+/[\w.-]+")
+
+
+def resolve_hub(query: str, api=None) -> tuple[str | None, list[str]]:
+    """A model name as people type it to (Hub id, other candidates). Tries the name as given,
+    then with the space between a word and its version closed up ("qwen 3.8" -> "qwen3.8"),
+    which is how the Hub spells model ids."""
+    from blackhole.hw.model import resolve
+    q = query.strip()
+    tight = re.sub(r"(?<=[A-Za-z])[\s_-]+(?=\d)", "", q)
+    best, others = None, []
+    for term in dict.fromkeys([tight, q]):
+        try:
+            rid, rest = resolve(term, api=api)
+        except Exception:  # noqa: BLE001  offline, blocked, rate limited
+            continue
+        if rid:
+            if best is None:
+                best, others = rid, list(rest)
+            else:
+                others += [r for r in [rid, *rest] if r != best and r not in others]
+            break
+    return best, others[:5]
+
+
 class RpcError(Exception):
     def __init__(self, code: int, message: str, data: Any = None):
         super().__init__(message)
@@ -354,13 +379,24 @@ class Helper:
         if not q.is_absolute() and (Path(self.ws.get("modelsDir") or "") / model).is_dir():
             q = Path(self.ws["modelsDir"]) / model
         self.progress(f"opening {model}", 0.1)
+        target, others, fuzzy = (q if q.is_dir() else model), [], False
+        if not q.is_dir() and not _HUB_ID.fullmatch(model.strip()):
+            # a name typed the way people say it ("qwen 3.8 flash next"): find the Hub id first
+            self.progress(f"looking up {model} on the Hub", 0.05)
+            rid, others = resolve_hub(model)
+            if not rid:
+                raise RpcError(MODEL_NOT_FOUND, f"no Hugging Face model matches {model!r}; give the exact org/name id")
+            target, fuzzy = rid, True
         try:
-            self.model = blackhole_dev.open(q if q.is_dir() else model)
+            self.model = blackhole_dev.open(target)
         except Exception as e:  # noqa: BLE001  hub errors and friends
-            raise RpcError(MODEL_NOT_FOUND, open_error(model, e)) from None
+            raise RpcError(MODEL_NOT_FOUND, open_error(str(target), e)) from None
         m = self.model
-        return {"id": m.id, "name": m.id.rstrip("/").split("/")[-1], "layers": len(m.layers),
-                "kind": "moe" if m.info.experts else "dense", "summary": m.summary()}
+        out = {"id": m.id, "name": m.id.rstrip("/").split("/")[-1], "layers": len(m.layers),
+               "kind": "moe" if m.info.experts else "dense", "summary": m.summary()}
+        if fuzzy:
+            out["resolvedFrom"], out["candidates"] = model, others
+        return out
 
     def _m(self):
         if self.model is None:

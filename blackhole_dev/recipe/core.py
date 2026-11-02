@@ -218,7 +218,7 @@ class Recipe:
         self.steps.append(st)
         return st
 
-    def fn(self, name: str, id: str | None = None, *, select: str | None = None, gates: list | None = None,  # noqa: A002
+    def fn(self, name: str, /, id: str | None = None, *, select: str | None = None, gates: list | None = None,  # noqa: A002
            when: Any = True, always: bool = False, scores: Any = None, functions: list | None = None,
            pack: str | None = None, **args) -> Step:
         """Call a named function. A job function (forkable pipeline stage) becomes a job.fn

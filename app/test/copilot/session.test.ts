@@ -16,6 +16,7 @@ function setup(scripts: Script[], opts: { active?: string; disk?: Record<string,
   const aborts = new Map<string, () => void>();
   const toolResults = new Map<string, { content: string; isError?: boolean }>();
   const opened: [string, { create?: boolean } | undefined][] = [];
+  const saves: string[] = [];
   const pump = (n = 400) => { for (let i = 0; i < n; i++) tick?.(); };
   const session = new CopilotSession({
     editor: ed,
@@ -28,6 +29,7 @@ function setup(scripts: Script[], opts: { active?: string; disk?: Record<string,
       yield* s(req, { pump, ed, aborted });
     },
     abortTurn: (id) => aborts.get(id)?.(),
+    saveForRun: async (p: string) => void saves.push(p),
     toolResult: (callId, r) => toolResults.set(callId, r),
     ...(opts.disk
       ? {
@@ -64,7 +66,7 @@ function setup(scripts: Script[], opts: { active?: string; disk?: Record<string,
   // Keep the pacer moving between awaits.
   const timer = setInterval(() => pump(50), 1);
   return {
-    ed, session, reqs, helperCalls, invokes, events, pump, toolResults, opened,
+    ed, session, reqs, helperCalls, invokes, events, pump, toolResults, opened, saves,
     done: () => {
       clearInterval(timer);
       // An expect() failing inside a scripted turn surfaces as an error event.
@@ -186,6 +188,29 @@ describe("CopilotSession", () => {
     await t.session.ask("run it on the b300");
     t.done();
     expect(t.invokes).toEqual([["vm:copilot.launch", { action: "run.launch", why: "Run the recipe on your B300", recipe: "r.py", host: "b300", requestedBy: "copilot" }]]);
+  });
+
+  it("a launch saves the recipe from the editor first, under its absolute path, and failed checks come back as an error", async () => {
+    const t = setup(
+      [
+        async function* () {
+          yield { type: "tool_use", id: "g1", name: "request_action", input: { action: "run.launch", why: "Run it", recipe: "recipes/q.py", host: "b300" } };
+          yield { type: "done", finishReason: "tool_use" };
+        },
+        async function* (req) {
+          const r = (req.messages.at(-1)!.content as any[])[0];
+          expect(r.is_error).toBe(true);
+          expect(r.content).toContain("Recipe lint: 1 error");
+          expect(r.content).not.toContain("declined");
+          yield { type: "done", finishReason: "stop" };
+        },
+      ],
+      { workspace: "/ws", invoke: () => ({ approved: false, host: "b300", failed: ["Recipe lint: 1 error: bad"] }) },
+    );
+    await t.session.ask("run it");
+    t.done();
+    expect(t.saves).toEqual(["/ws/recipes/q.py"]);
+    expect(t.invokes[0][1]).toMatchObject({ recipe: "/ws/recipes/q.py" });
   });
 
   it("run_analysis goes through the analysis module as the copilot, so a big read still asks the user", async () => {

@@ -383,3 +383,48 @@ def test_lint_takes_a_functions_file_as_clean_and_still_flags_a_file_with_neithe
     g = tmp_path / "nothing.py"
     g.write_text("x = 1\n")
     assert [p["code"] for p in lint(g)[1]] == ["recipe.none"]
+
+
+def test_fn_passes_a_name_argument_through():
+    # external-bench (and other functions) take a `name`; it is not recipe.fn's own first argument
+    r = Recipe("a/b", "1.0.0")
+    st = r.fn("external-bench", preset="swebench-pro", name="smoke-run", id="swebench")
+    assert st.id == "swebench" and st.params["fn"] == "external-bench" and st.params["name"] == "smoke-run"
+
+
+def test_open_model_looks_up_a_typed_name_on_the_hub(monkeypatch):
+    from types import SimpleNamespace
+
+    from blackhole_dev import rpc
+
+    ids = ["Qwen/Qwen3.8-Flash-Next", "Qwen/Qwen3.8-Flash-Next-FP8", "mlx-community/Qwen3.8-Flash-Next-4bit",
+           "Qwen/Qwen3-30B-A3B"]
+    seen = []
+
+    class Api:
+        def model_info(self, q):
+            raise KeyError(q)
+
+        def list_models(self, search, sort, limit):
+            seen.append(search)
+            key = search.lower().replace("-", "").replace(" ", "")
+            return [SimpleNamespace(id=i, downloads=10) for i in ids if key in i.lower().replace("-", "")]
+
+    rid, others = rpc.resolve_hub("qwen 3.8 flash next", api=Api())
+    assert rid == "Qwen/Qwen3.8-Flash-Next"
+    assert "Qwen/Qwen3.8-Flash-Next-FP8" in others
+    assert seen[0].startswith("qwen3.8")          # the version is closed up before searching
+
+    opened = []
+    monkeypatch.setattr(rpc, "resolve_hub", lambda q: ("Qwen/Qwen3.8-Flash-Next", ["Qwen/Qwen3.8-Flash-Next-FP8"]))
+    fake = SimpleNamespace(id="Qwen/Qwen3.8-Flash-Next", layers=[1, 2], info=SimpleNamespace(experts=64),
+                           summary=lambda: "moe")
+    monkeypatch.setattr(rpc.blackhole_dev, "open", lambda t: opened.append(t) or fake)
+    h = rpc.Helper(out=open("/dev/null", "w"))
+    out = h.anatomy_open({"model": "qwen 3.8 flash next"})
+    assert opened == ["Qwen/Qwen3.8-Flash-Next"]
+    assert out["id"] == "Qwen/Qwen3.8-Flash-Next" and out["resolvedFrom"] == "qwen 3.8 flash next"
+    assert out["candidates"] == ["Qwen/Qwen3.8-Flash-Next-FP8"]
+    # an exact id is opened as given, without a search
+    h.anatomy_open({"model": "Qwen/Qwen3-30B-A3B"})
+    assert opened[-1] == "Qwen/Qwen3-30B-A3B"
