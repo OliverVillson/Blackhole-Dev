@@ -50,7 +50,7 @@ def test_every_builtin_is_its_own_readable_file():
         s = fns.source(name)
         assert s["readonly"] and s["text"] == p.read_text()
     # the pipeline's GPU stages are named functions too
-    for name in ("calibrate", "reap-gpu", "traces", "distil", "qheal", "gptq", "reaq-codebook", "mlx-export", "bench",
+    for name in ("calibrate", "reap-gpu", "traces", "distil", "qheal", "gptq", "reaq-codebook", "mlx-export", "hex-vllm", "bench",
                  "fp8-experts", "package"):
         assert reg[name].per == "job", name
 
