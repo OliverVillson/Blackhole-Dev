@@ -25,7 +25,11 @@ from contextlib import contextmanager
 from pathlib import Path
 
 TOPK_REF = 20          # the pipeline's KL: teacher's top-20 tokens, both renormalised there
-NAMES = ("original", "pruned", "healed", "int4", "reaq", "mlx")
+NAMES = ("original", "pruned", "healed", "int4", "reaq", "mlx", "hex")
+# "final": the job's last artefact a benchmark should measure, best first. "hex" is a vLLM
+# blackhole-hex folder (the hex-vllm function's output); a plain (non-HEX) MLX folder only
+# counts when the benchmark can run MLX (serve="mlx").
+FINAL_ORDER = ("hex", "mlx", "int4", "healed", "pruned", "original")
 
 
 def log(msg: str) -> None:
@@ -34,13 +38,41 @@ def log(msg: str) -> None:
 
 # --------------------------------------------------------------------------- which model
 
+def quant_method(path: Path) -> str:
+    try:
+        cfg = json.loads((Path(path) / "config.json").read_text())
+    except (OSError, ValueError):
+        return ""
+    return str((cfg.get("quantization_config") or {}).get("quant_method") or "")
+
+
+def hex_vllm_dir(job) -> Path | None:
+    """The job's vLLM blackhole-hex folder, if one was written: work/hex-vllm.json {"out"} (the
+    hex-vllm function) or work/hexvllm.json (the pipeline stage),
+    else the newest folder with quant_method "blackhole-hex" in the job's out/ folders."""
+    try:
+        out = (job.read("work/hex-vllm.json") or job.read("work/hexvllm.json") or {}).get("out")
+    except Exception:  # noqa: BLE001
+        out = None
+    if out and (Path(out) / "config.json").exists():
+        return Path(out)
+    cands = []
+    for root in {job.path("out"), Path(job.root) / "out"}:
+        try:
+            cands += [p for p in Path(root).iterdir() if p.is_dir() and quant_method(p) == "blackhole-hex"]
+        except OSError:
+            pass
+    return max(cands, key=lambda p: p.stat().st_mtime).resolve() if cands else None
+
+
 def model_dirs(job) -> dict:
     """The job's model folders by name (a name whose folder has no config.json is left out)."""
     out = {}
     for name in NAMES:
         try:
-            p = getattr(job, {"original": "model_dir", "pruned": "pruned_dir", "healed": "healed_dir",
-                              "int4": "gptq_dir", "reaq": "reaq_dir", "mlx": "mlx_dir"}[name])
+            p = hex_vllm_dir(job) if name == "hex" else getattr(job, {
+                "original": "model_dir", "pruned": "pruned_dir", "healed": "healed_dir",
+                "int4": "gptq_dir", "reaq": "reaq_dir", "mlx": "mlx_dir"}[name])
         except Exception:  # noqa: BLE001  (a stage that never ran)
             p = None
         if p is not None and (Path(p) / "config.json").exists():
@@ -48,13 +80,37 @@ def model_dirs(job) -> dict:
     return out
 
 
-def resolve(job, which: str) -> tuple[str, Path]:
+def is_hex(path: Path) -> bool:
+    """A blackhole-hex folder (hex-vllm, hex-pack): vLLM with the BlackHole runtime serves it,
+    transformers cannot load it."""
+    try:
+        cfg = json.loads((Path(path) / "config.json").read_text())
+    except (OSError, ValueError):
+        return False
+    return (cfg.get("quantization_config") or {}).get("quant_method") == "blackhole-hex"
+
+
+def is_hex_mlx(path: Path) -> bool:
+    try:
+        return bool(json.loads((Path(path) / "config.json").read_text()).get("hex"))
+    except (OSError, ValueError):
+        return False
+
+
+def resolve(job, which: str, mlx_ok: bool = True) -> tuple[str, Path]:
     """(label, folder) for a model name of the job, "latest" (healed, else pruned, else the
-    original), or a folder path."""
+    original), "final" (the last artefact: a vLLM HEX folder, else the MLX export, else int4,
+    healed, pruned, original; with mlx_ok=False an MLX export only when it has HEX experts,
+    which the vLLM side converts), or a folder path."""
     dirs = model_dirs(job)
     if which in ("", "latest"):
         for name in ("healed", "pruned", "original"):
             if name in dirs:
+                return name, dirs[name]
+        raise RuntimeError("the job has no model folder yet (run the weights stage first)")
+    if which == "final":
+        for name in FINAL_ORDER:
+            if name in dirs and (name != "mlx" or mlx_ok or is_hex_mlx(dirs[name])):
                 return name, dirs[name]
         raise RuntimeError("the job has no model folder yet (run the weights stage first)")
     if which in NAMES:
@@ -63,7 +119,7 @@ def resolve(job, which: str) -> tuple[str, Path]:
         return which, dirs[which]
     p = Path(which).expanduser()
     if not (p / "config.json").exists():
-        raise RuntimeError(f"{which!r} is neither one of {', '.join(NAMES)} nor a model folder with a config.json")
+        raise RuntimeError(f"{which!r} is neither final, latest, one of {', '.join(NAMES)} nor a model folder with a config.json")
     return p.name, p
 
 
@@ -296,6 +352,49 @@ def endpoint_speed(url: str, model: str, prompts: list[str], max_tokens: int, co
     return out
 
 
+def stream_chat(url: str, model: str, messages: list[dict], max_tokens: int, api_key: str = "",
+                timeout: float = 600.0, temperature: float = 0.0, extra: dict | None = None) -> dict:
+    """One streamed /chat/completions request: the answer, its thinking (vLLM's reasoning
+    parser puts it in reasoning_content / reasoning), seconds to the first token, total
+    seconds, and the completion tokens (the server's usage count, else one per chunk)."""
+    body = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature,
+            "stream": True, "stream_options": {"include_usage": True}, **(extra or {})}
+    req = urllib.request.Request(url.rstrip("/") + "/chat/completions", data=json.dumps(body).encode(),
+                                 headers=_headers(api_key), method="POST")
+    t0 = time.perf_counter()
+    first = None
+    chunks = 0
+    usage = None
+    text, think = [], []
+    finish = None
+    with urllib.request.urlopen(req, timeout=timeout) as r:   # noqa: S310  (the user's own endpoint)
+        for raw in r:
+            line = raw.decode("utf-8", "ignore").strip()
+            if not line.startswith("data:"):
+                continue
+            data = line[5:].strip()
+            if data == "[DONE]":
+                break
+            ev = json.loads(data)
+            if ev.get("usage"):
+                usage = ev["usage"]
+            for c in ev.get("choices") or []:
+                d = c.get("delta") or {}
+                piece = d.get("content") or ""
+                thought = d.get("reasoning_content") or d.get("reasoning") or ""
+                if piece or thought:
+                    chunks += 1
+                    if first is None:
+                        first = time.perf_counter()
+                text.append(piece)
+                think.append(thought)
+                finish = c.get("finish_reason") or finish
+    t1 = time.perf_counter()
+    return {"text": "".join(text), "reasoning": "".join(think), "ttft": (first or t1) - t0, "total": t1 - t0,
+            "tokens": int((usage or {}).get("completion_tokens") or chunks),
+            "prompt_tokens": int((usage or {}).get("prompt_tokens") or 0), "finish_reason": finish}
+
+
 # --------------------------------------------------------------------------- a local server
 
 def free_port() -> int:
@@ -308,7 +407,7 @@ def server_cmd(kind: str, path: Path, port: int, name: str, extra: str = "") -> 
     """The command that serves `path` on an OpenAI-compatible endpoint: vLLM on the GPU VM,
     mlx_lm.server on a Mac (with the settings that fit a 16 GB machine)."""
     if kind == "vllm":
-        cmd = ["vllm", "serve", str(path), "--port", str(port), "--served-model-name", name,
+        cmd = [vllm_exe() or "vllm", "serve", str(path), "--port", str(port), "--served-model-name", name,
                "--trust-remote-code"]
     elif kind == "mlx":
         cmd = [sys.executable, "-m", "mlx_lm.server", "--model", str(path), "--port", str(port),
@@ -316,6 +415,26 @@ def server_cmd(kind: str, path: Path, port: int, name: str, extra: str = "") -> 
     else:
         raise ValueError(f"serve must be '', 'vllm' or 'mlx', not {kind!r}")
     return cmd + shlex.split(extra)
+
+
+def vllm_exe() -> str | None:
+    """The `vllm` command: $BLACKHOLE_VLLM, the one next to $BLACKHOLE_VLLM_PY (set by the
+    BlackHole installer's launcher), the installer's vLLM venv ($BLACKHOLE_HOME/vllm,
+    ~/.blackhole/vllm, ~/vllm-venv), else whichever `vllm` is on PATH. The pipeline's own venv
+    has no vLLM on the VM, so a bare `vllm` would not be found there."""
+    import shutil
+    if os.environ.get("BLACKHOLE_VLLM"):
+        return os.environ["BLACKHOLE_VLLM"]
+    cands = []
+    if os.environ.get("BLACKHOLE_VLLM_PY"):
+        cands.append(Path(os.environ["BLACKHOLE_VLLM_PY"]).parent / "vllm")
+    home = Path(os.environ.get("BLACKHOLE_HOME") or Path.home() / ".blackhole")
+    cands += [home / "vllm" / "bin" / "vllm", Path.home() / ".blackhole" / "vllm" / "bin" / "vllm",
+              Path.home() / "vllm-venv" / "bin" / "vllm"]
+    for c in cands:
+        if c.is_file() and os.access(c, os.X_OK):
+            return str(c)
+    return shutil.which("vllm")
 
 
 @contextmanager
@@ -405,20 +524,57 @@ def gpu_used_gb() -> float | None:
 
 # --------------------------------------------------------------------------- other harnesses
 
+def harness_script(rel: str = "harness/scripts/swebench-pro.sh") -> Path:
+    """A BlackHole-Harness script on this machine: $BLACKHOLE_HARNESS_SRC, the checkout the
+    installed pipeline runs from, or ~/BlackHole-Harness (where the installer clones it)."""
+    cands = []
+    if os.environ.get("BLACKHOLE_HARNESS_SRC"):
+        cands.append(Path(os.environ["BLACKHOLE_HARNESS_SRC"]).expanduser())
+    try:
+        import blackhole_pipeline
+        cands.append(Path(blackhole_pipeline.__file__).resolve().parents[2])
+    except Exception:  # noqa: BLE001
+        pass
+    cands.append(Path.home() / "BlackHole-Harness")
+    for c in cands:
+        if (c / rel).is_file():
+            return c / rel
+    raise RuntimeError(f"no BlackHole-Harness checkout with {rel} here (looked in {', '.join(map(str, cands))}). "
+                       "Run the installer on this machine: curl -fsSL https://blackholeharness.dev/install.sh | bash")
+
+
+def bh_home() -> Path:
+    return Path(os.environ.get("BLACKHOLE_HOME") or Path.home() / ".blackhole")
+
+
+def swebench_progress(run_dir: Path) -> tuple[int, int, int] | None:
+    """(tasks, agent runs finished, re-grades finished) of a swebench-pro.sh run folder."""
+    ids = run_dir / "ids.txt"
+    if not ids.is_file():
+        return None
+    total = sum(1 for x in ids.read_text().splitlines() if x.strip())
+    name = run_dir.name
+    done = len(list((run_dir / "jobs" / name).glob("*/result.json")))
+    regraded = len(list((run_dir / "jobs" / f"{name}-regrade").glob("*/result.json")))
+    return total, min(done, total), min(regraded, total)
+
+
 PRESETS = {
-    # SWE-bench Pro (Scale AI's public set) through BlackHole-Harness's VM script
-    # (harness/scripts/swebench-pro.sh): it serves the model itself on 127.0.0.1:8000 (or reuses
-    # a server already there; an MLX HEX folder is converted to <folder>-vllm on first use), runs
-    # the agent in Docker, re-grades, and writes runs/<name>/results.json = {instance: true|false}.
+    # SWE-bench Pro V2 (Scale AI's public set) through BlackHole-Harness's VM script
+    # (harness/scripts/swebench-pro.sh): it serves the model itself with vLLM on a free port (an
+    # MLX HEX export is converted to <folder>-vllm on first use; a blackhole-hex folder is served
+    # as it is), runs the agent in Docker, re-grades, and writes
+    # $BLACKHOLE_HOME/swebench/runs/<run>/results.json = {instance: true|false}, <run> being
+    # <job folder>-<name>, so every job has its own run and a rerun of the step resumes it.
     # Its last line is `R/T resolved (P%), E errored`. Needs Docker: the GPU VM, not the Mac.
-    "swebench-pro": {"command": "bash ~/BlackHole-Harness/harness/scripts/swebench-pro.sh {model_dir} "
-                                "--tasks smoke -n {workers} --name {name}",
-                     "result": "~/.blackhole/swebench/runs/{name}/results.json", "score_key": "",
-                     "regex": r"(\d+)/(\d+) resolved", "metric": "resolved", "serves_itself": True},
+    "swebench-pro": {"command": "bash {script} {model_dir} --tasks {tasks} -n {workers} --name {run} --port {port}",
+                     "result": "{bh_home}/swebench/runs/{run}/results.json", "score_key": "",
+                     "regex": r"(\d+)/(\d+) resolved", "metric": "resolved", "serves_itself": True,
+                     "script": "harness/scripts/swebench-pro.sh", "vllm": True},
     # any harness that prints `score: 0.42` or `pass@1: 42.0%` as its last such line
     "generic": {"command": "", "result": "", "score_key": "",
                 "regex": r"(?i)(?:pass@1|accuracy|score|resolved)\s*[:=]\s*([0-9.]+)\s*(%?)",
-                "metric": "score", "serves_itself": False},
+                "metric": "score", "serves_itself": False, "script": "", "vllm": False},
 }
 
 _SCORE_KEYS = ("resolved_rate", "resolve_rate", "pass@1", "accuracy", "score", "resolved")

@@ -29,12 +29,14 @@ def speed_bench(job, model: str = "latest", url: str = "", served_model: str = "
                                  is the server's (GPU memory with vLLM, RSS with MLX)
       url = "http://host:port/v1"  any OpenAI-compatible endpoint already running; set
                                  served_model when it serves several
-    `model` is any of original, pruned, healed, int4, reaq, mlx, a folder, or "latest".
+    `model` is any of original, pruned, healed, int4, reaq, mlx, hex, a folder, or "latest".
     Writes work/speed-<model>.json."""
     label, path = _bench.resolve(job, model) if not url else (served_model or "endpoint", None)
     if not url and not serve:
         if _bench.is_mlx(path):
             raise RuntimeError(f"{path} is an MLX folder: use serve = \"mlx\" (on the Mac)")
+        if _bench.is_hex(path):
+            raise RuntimeError(f"{path} is a HEX folder: use serve = \"vllm\" (on the GPU VM)")
         tok = _smoe.tokenizer(path)
         job.emit(pct=5, msg=f"loading {label}")
         hf = _bench.load(path)

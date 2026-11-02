@@ -66,7 +66,7 @@ export interface Manifest {
   runner?: "pipeline" | "core";
   stages?: string[];
   inputs?: Record<string, unknown>;
-  needs?: { gpu_gb?: number | null; disk_gb?: number | null };
+  needs?: { gpu_gb?: number | null; disk_gb?: number | null; docker?: boolean };
   blackhole_dev_version?: string;
   files?: Record<string, string>;
   functions?: { name: string; origin: string; sha256?: string; path?: string }[];

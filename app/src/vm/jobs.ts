@@ -93,6 +93,23 @@ export function baseModelCheck(model: string, plan: PlanResult | undefined, p: P
     (p && !p.hfToken ? "; could not check whether it is gated, and the VM has no Hugging Face token (public models do not need one)" : ""));
 }
 
+/** Docker for a recipe that runs SWE-bench Pro: swebench-pro.sh needs it, installs it or joins the
+ * docker group itself when sudo needs no password, and refuses to start below 60 GB free for images. */
+export function dockerCheck(p: Probe | undefined): Check {
+  const c = (tone: Check["tone"], detail: string): Check => ({ id: "docker", label: "Docker (SWE-bench Pro)", tone, detail });
+  const d = p?.docker;
+  if (!d) return c("warn", "could not check Docker on this machine; the SWE-bench Pro step needs it");
+  const free = d.freeGb != null ? `${d.freeGb.toFixed(0)} GB free for images` : "";
+  if (d.usable || d.sudo) {
+    const how = d.usable ? "Docker works" : !d.installed ? "Docker is not installed; the SWE-bench Pro step installs it (sudo needs no password here)"
+      : "Docker is installed but not usable by you yet; the SWE-bench Pro step joins the docker group itself";
+    if (d.freeGb != null && d.freeGb < 60) return c("bad", `${how} · only ${free}; SWE-bench Pro needs at least 60 GB (docker system prune -af on the VM)`);
+    return c(d.freeGb != null && d.freeGb < 150 ? "warn" : d.usable ? "ok" : "info", [how, free, d.freeGb != null && d.freeGb < 150 ? "150+ GB recommended for the full 642 tasks" : ""].filter(Boolean).join(" · "));
+  }
+  return c("bad", (d.installed ? "Docker is installed but not usable by you, " : "Docker is not installed, ") +
+    "and sudo asks for a password, so the SWE-bench Pro step cannot set it up. On the VM run: curl -fsSL https://get.docker.com | sudo sh && sudo usermod -aG docker $USER  then log out and back in, and check again");
+}
+
 export function sha256File(path: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const h = createHash("sha256");
@@ -364,6 +381,7 @@ export class JobsService {
       const needDisk = manifest?.needs?.disk_gb ?? undefined;
       checks.push({ id: "disk", label: "Disk", tone: needDisk != null && p.diskFreeGb < needDisk ? "bad" : p.diskFreeGb < 100 ? "warn" : "ok",
         detail: `${p.diskFreeGb.toFixed(0)} GB free` + (needDisk != null ? ` · needs ${needDisk.toFixed(0)} GB` : "") });
+      if (manifest?.needs?.docker) checks.push(dockerCheck(p));
       const busy = p.jobs.filter((j) => j.running);
       if (busy.length) checks.push({ id: "busy", label: "Machine busy", tone: "warn", detail: `${busy.map((j) => j.name).join(", ")} running; both would share the GPU` });
     } else {

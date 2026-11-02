@@ -8,7 +8,7 @@ import { Settings } from "./settings";
 import * as licence from "./licence";
 import { Workspace, ensureWorkspace, workspacePaths } from "./workspace";
 import { pickPython, runChecks, sourceCheckout } from "./python";
-import { Terminals } from "./terminal";
+import { Terminals, type TermOpts } from "./terminal";
 import { Host } from "./host";
 import { buildMenu } from "./menu";
 import { setupUpdates } from "./updates";
@@ -197,7 +197,11 @@ async function main(): Promise<void> {
     }
   });
   reg("gate", "gate:confirm", (req) => gate.confirm(req));
-  reg("term", "term:create", (o) => terms.create(o));
+  // Local terminals get the Hugging Face token from Settings as $HF_TOKEN (hf-publish's commands pipe it to the VM).
+  reg("term", "term:create", (o: TermOpts) => {
+    const t = secrets.getSync("hf-token");
+    return terms.create({ ...o, env: { ...(t ? { HF_TOKEN: t } : {}), ...(o?.env ?? {}) } });
+  });
   reg("term", "term:write", (id: string, d: string) => terms.write(id, d));
   reg("term", "term:resize", (id: string, c: number, r: number) => terms.resize(id, c, r));
   reg("term", "term:dispose", (id: string) => terms.dispose(id));

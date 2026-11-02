@@ -98,6 +98,12 @@ class Job:
         out = (self.rj.read("work/mlx.json") or {}).get("out")
         return Path(out) if out else None
 
+    @property
+    def hex_dir(self) -> Path | None:
+        """The HEX folder for vLLM that hex-vllm wrote (None before it ran)."""
+        out = (self.rj.read("work/hexvllm.json") or {}).get("out")
+        return Path(out) if out else None
+
     def path(self, *parts) -> Path:
         return self.rj.path(*parts)
 
