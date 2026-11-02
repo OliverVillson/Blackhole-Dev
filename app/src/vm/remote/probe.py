@@ -157,6 +157,32 @@ def models():
     return [n.replace("--", "/", 1) for n in names if os.path.exists(os.path.join(root, n, "config.json"))]
 
 
+def docker():
+    """Docker for SWE-bench Pro: there, usable now, the user in its group, sudo without a password, free space."""
+    installed = shutil.which("docker") is not None
+    usable = installed and run(["docker", "info"], timeout=30)[0] == 0
+    rc, so, _ = run(["id", "-nG"], timeout=10)
+    in_group = rc == 0 and "docker" in so.split()
+    try:
+        import grp
+        in_group = in_group or os.environ.get("USER", "") in grp.getgrnam("docker").gr_mem
+    except (KeyError, ImportError):
+        pass
+    sudo = run(["sudo", "-n", "true"], timeout=10)[0] == 0
+    root = "/var/lib/docker"
+    if usable:
+        rc, so, _ = run(["docker", "info", "-f", "{{.DockerRootDir}}"], timeout=30)
+        root = so.strip() or root if rc == 0 else root
+    d = root
+    while not os.path.exists(d) and d != "/":
+        d = os.path.dirname(d)
+    try:
+        free = round(shutil.disk_usage(d).free / 1e9, 1)
+    except OSError:
+        free = None
+    return {"installed": installed, "usable": usable, "inGroup": in_group, "sudo": sudo, "freeGb": free}
+
+
 venv = find_venv()
 py = os.path.join(venv, "bin", "python") if venv else None
 recipe_flag, dev = False, None
@@ -180,5 +206,6 @@ print(json.dumps({
     "jobs": jobs(),
     "hfToken": hf_token(),
     "models": models(),
+    "docker": docker(),
     "now": time.time(),
 }))

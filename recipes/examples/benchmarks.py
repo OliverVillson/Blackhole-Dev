@@ -10,10 +10,12 @@
 # The shared code is blackhole_dev/functions_src/_bench.py.
 #
 # Point "model" at the folder to test (or leave "latest" to take the job's healed / pruned
-# model). For SWE-bench Pro set "preset" to swebench-pro: it runs BlackHole-Harness's
-# harness/scripts/swebench-pro.sh on the model (smoke task set; Docker on the GPU VM). For any
+# model; "final" is the job's last artefact, a HEX build first, which external-bench uses when
+# it runs after a build). For SWE-bench Pro set "preset" to swebench-pro: it runs BlackHole-Harness's
+# harness/scripts/swebench-pro.sh on the model ("tasks": smoke = 20, hard = 51, all = 642; Docker on
+# the GPU VM; results in work/external/swebench-pro/results.json). For any
 # other harness set "harness" to its command; with neither, that step is skipped. The command gets
-# {url}, {model}, {model_dir}, {out}, {workers}, {name} filled in; for example
+# {url}, {model}, {model_dir}, {out}, {workers}, {tasks}, {name}, {run}, {port} filled in; for example
 # lm-eval:  lm_eval --model local-completions --model_args model={model},base_url={url}/completions
 #           --tasks gsm8k --output_path {out}       (score_key = results.gsm8k.exact_match,strict-match)
 from blackhole_dev.recipe import Recipe, gate
@@ -53,4 +55,7 @@ preset = recipe.input("preset", "text", default="generic",
 recipe.fn("kl-eval", model=model, calib=calib, n_tokens=n_tokens, id="kl",
           gates=[gate("kl", "<=", max_kl)])
 recipe.fn("speed-bench", model=model, serve=serve, concurrency=concurrency, id="speed")
-recipe.fn("external-bench", command=harness, preset=preset, model=model, serve=serve, id="external")
+tasks = recipe.input("tasks", "text", default="smoke",
+                     help="SWE-bench Pro task set: smoke (20, about 1 h on a B300), hard (51), all (642, 10 to 14 h) or a number")
+
+recipe.fn("external-bench", command=harness, preset=preset, model=model, serve=serve, tasks=tasks, id="external")
