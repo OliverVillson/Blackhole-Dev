@@ -48,6 +48,15 @@ export interface Probe {
   jobs: RemoteJob[];
   hfToken?: boolean;          // a Hugging Face token is set up for this user (HF_TOKEN or the hf login file)
   models?: string[];          // Hub ids already downloaded to the pipeline's models folder
+  docker?: DockerProbe;       // Docker for SWE-bench Pro (external-bench preset swebench-pro)
+}
+
+export interface DockerProbe {
+  installed: boolean;
+  usable: boolean;            // `docker info` works for this user right now
+  inGroup: boolean;           // the user is in the docker group (it applies to new logins)
+  sudo: boolean;              // sudo needs no password, so swebench-pro.sh can install or fix Docker itself
+  freeGb: number | null;      // free space where Docker keeps images
 }
 
 export interface RemoteJob {
@@ -115,7 +124,7 @@ export const jobKey = (j: JobRef) => `${j.hostId}::${j.name}`;
 
 /** Row in the Run on VM dialog's checks list. */
 export interface Check {
-  id: "lint" | "plan" | "bundle" | "ssh" | "pipeline" | "recipe-flag" | "blackhole-dev" | "gpu" | "disk" | "busy" | "model";
+  id: "lint" | "plan" | "bundle" | "ssh" | "pipeline" | "recipe-flag" | "blackhole-dev" | "gpu" | "disk" | "busy" | "model" | "docker";
   label: string;
   tone: "ok" | "warn" | "bad" | "info";
   detail: string;

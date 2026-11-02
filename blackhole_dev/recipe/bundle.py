@@ -126,7 +126,8 @@ def bundle(path: str | Path, out: str | Path | None = None, inputs: dict | None 
         "runner": runner,
         "stages": pl.stage_list(raw) if runner == "pipeline" else [s.id for s in r.steps],
         "inputs": vals,
-        "needs": (plan_out or {}).get("needs") or {"gpu_gb": None, "disk_gb": None},
+        "needs": {**((plan_out or {}).get("needs") or {"gpu_gb": None, "disk_gb": None}),
+                  **({"docker": True} if needs_docker(raw, vals) else {})},
         "functions": fn_rows,
         "blackhole_dev_version": blackhole_dev.__version__,
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -136,6 +137,21 @@ def bundle(path: str | Path, out: str | Path | None = None, inputs: dict | None 
     sha = pl.write_bundle(dst, files, manifest)
     manifest = json.loads(_read_member(dst, "manifest.json"))
     return {"bundle": str(dst.resolve()), "sha256": sha, "functions": fn_rows, "manifest": manifest}
+
+
+def needs_docker(raw: dict, vals: dict) -> bool:
+    """Whether a stage runs SWE-bench Pro (external-bench, preset swebench-pro), which needs Docker
+    on the machine; the Run on VM checks show a Docker row for it."""
+    def val(v):
+        if isinstance(v, str) and v.startswith("${inputs.") and v.endswith("}"):
+            return vals.get(v[len("${inputs."):-1], v)
+        return v
+    for st in raw.get("stage") or []:
+        if st.get("fn") == "external-bench" or "external-bench" in _stage_fns(st):
+            args = {**st, **(st.get("args") or {})}
+            if val(args.get("preset")) == "swebench-pro" or "swebench-pro" in str(val(args.get("command") or "")):
+                return True
+    return False
 
 
 def _stage_fns(st: dict) -> list[str]:
