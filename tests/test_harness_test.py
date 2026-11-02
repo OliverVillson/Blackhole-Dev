@@ -227,6 +227,7 @@ def test_packaged_hex_build_is_served_tested_and_left_up(vm):
     conv = vm["models"] / "qwen-tiny-MLX-0GB-vllm"
     assert json.loads((conv / "config.json").read_text())["quantization_config"]["quant_method"] == "blackhole-hex"
     assert not (vm["build"] / "config.json").read_text().count("blackhole-hex")      # the build is untouched
+    assert (conv / ".verified").is_file()           # swebench-pro.sh reuses it
     served = [json.loads(x) for x in (vm["models"] / "served.txt").read_text().splitlines()]
     assert served[-1]["path"] == str(conv) and "--reasoning-parser" in served[-1]["argv"]
     assert res["from"] == "receipt.json" and res["smoke_passed"] == res["smoke_total"] == 4
