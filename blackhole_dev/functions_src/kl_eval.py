@@ -17,7 +17,7 @@ def kl_eval(job, model: str = "latest", base: str = "original", calib: str = "",
     """How far a compressed model drifted from its base: KL(base || model) over the base's
     top-20 tokens (both renormalised there, the pipeline's own measure), top-1 agreement and
     both perplexities, on the same `n_tokens` of held-out text. `model` and `base` are any of
-    original, pruned, healed, int4, a folder path, or "latest" (healed, else pruned).
+    original, pruned, healed, int4, a folder path, or "latest" (healed, else pruned); not hex.
 
     The text: empty `calib` = the job's held-out answers when there are any, else the "mix"
     set; or chat, code, math, contest, mix, or your own .txt/.jsonl. The base runs first and
@@ -29,6 +29,10 @@ def kl_eval(job, model: str = "latest", base: str = "original", calib: str = "",
     for p in (path, bpath):
         if _bench.is_mlx(p):
             raise RuntimeError(f"{p} is an MLX folder; kl-eval loads models with transformers")
+        if _bench.is_hex(p):
+            raise RuntimeError(f"{p} is a HEX folder for vLLM, which transformers cannot load: hex-vllm already "
+                               "measured its KL to the teacher (work/hexvllm.json); use speed-bench / external-bench "
+                               "with serve = \"vllm\" for it")
     tok = _smoe.tokenizer(bpath)
     texts, note = _smoe.calib_texts(calib, n_tokens, seed, job.path("data", "heldout.jsonl"))
     data = list(_smoe.batches(texts, tok, n_tokens, seq_len, batch_size, seed))

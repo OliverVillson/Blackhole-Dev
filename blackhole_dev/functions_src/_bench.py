@@ -80,6 +80,16 @@ def model_dirs(job) -> dict:
     return out
 
 
+def is_hex(path: Path) -> bool:
+    """A blackhole-hex folder (hex-vllm, hex-pack): vLLM with the BlackHole runtime serves it,
+    transformers cannot load it."""
+    try:
+        cfg = json.loads((Path(path) / "config.json").read_text())
+    except (OSError, ValueError):
+        return False
+    return (cfg.get("quantization_config") or {}).get("quant_method") == "blackhole-hex"
+
+
 def is_hex_mlx(path: Path) -> bool:
     try:
         return bool(json.loads((Path(path) / "config.json").read_text()).get("hex"))
