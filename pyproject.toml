@@ -22,6 +22,9 @@ blackhole_dev = "blackhole_dev.jobctx"
 [tool.setuptools.packages.find]
 include = ["blackhole_dev*"]
 
+[tool.setuptools.package-data]
+blackhole_dev = ["data/*.txt"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

@@ -61,6 +61,8 @@ export interface CopilotHost {
   readFile?(path: string): Promise<string>;
   /** Recipe files in the workspace (list_files tool). */
   listFiles?(): Promise<string[]>;
+  /** Save the recipe and its functions from the editor to disk before a run bundles them. */
+  saveForRun?(recipe: string): Promise<unknown>;
   /** Open a file in the editor; I3 only works on open buffers. create: the file is new, open an empty tab for it. */
   openFile?(path: string, opts?: { create?: boolean }): Promise<void>;
   /** Timer for the pacer. Tests pass a manual one. */
@@ -586,8 +588,20 @@ export class CopilotSession {
       }
       case "request_action": {
         const channel = GATED_CHANNELS[input.action];
-        const result = await this.host.invoke(channel, { ...input, requestedBy: "copilot" });
+        const req = { ...input };
+        if (typeof req.recipe === "string" && req.recipe) {
+          // the model names the recipe workspace-relative; main bundles it from disk, so it needs
+          // the absolute path and what is in the editor (the copilot's own pending lines) saved
+          req.recipe = this.resolve(req.recipe);
+          if (input.action === "run.launch") await this.host.saveForRun?.(req.recipe);
+        }
+        const result = await this.host.invoke(channel, { ...req, requestedBy: "copilot" });
         const approved = !(result && typeof result === "object" && (result as { approved?: boolean }).approved === false);
+        const failed = (result as { failed?: string[] } | null)?.failed;
+        if (!approved && failed?.length) {
+          // the pre-run checks failed before the user was asked: say why, so the model can fix it
+          throw new Error(`${input.action} did not start: the checks failed before the confirm dialog opened:\n- ${failed.join("\n- ")}\nFix what you can (lint errors, the recipe), say what the user must do for the rest, then ask again.`);
+        }
         return {
           content: approved ? `The user approved ${input.action}. Result: ${JSON.stringify(result ?? null)}` : `The user declined ${input.action}. Do not ask again unless they bring it up.`,
           summary: approved ? `${input.action} approved by you` : `${input.action} declined`,

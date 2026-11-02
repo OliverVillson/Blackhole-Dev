@@ -275,6 +275,7 @@ recipe bundle or your functions folder replaces the built-in stage.
 | `harness-test` | serves the job's final build (`model="final"`, same order as external-bench; a hex-vllm folder as it is) with vLLM on the GPU VM (an MLX HEX export converted once to `<folder>-vllm` for the blackhole-hex kernel), runs smoke prompts with checked answers, decode tok/s, first token, throughput, weights / KV / GPU memory, and leaves the server up to chat with (`keep_serving`) | (none) |
 | `fp8-experts` | REAPer's fp8-expert folder | quant |
 | `package` | model cards, receipt, RESULTS.md | package |
+| `hf-publish` | the finished model ready for the Hugging Face Hub in `<job>/publish/<name>/` (hardlinked weights, Hub model card, LICENSE, config without local paths), checked shard by shard, and the upload commands in `<job>/publish/COMMANDS.txt`; uploads only with `upload=1` and a token. The upload itself: `python -m blackhole_dev.hfpub --job JOB --upload` | (none) |
 
 ```python
 @function("distil-twice", per="job")
