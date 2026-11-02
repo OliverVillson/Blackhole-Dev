@@ -114,9 +114,10 @@ export const TOOLS = [
   spec({
     name: "open_model",
     side: "helper",
-    description: "Open a model's anatomy (headers only, no weights downloaded): a local folder or a Hub id.",
+    description:
+      "Open a model's anatomy (headers only, no weights downloaded): a local folder, a Hub id, or a model name as the user typed it (\"qwen 3.8 flash next\"), which is looked up on the Hub. The result's id is the exact Hub id: use it as the recipe's base. resolvedFrom and candidates show when a name was looked up.",
     schema: z.object({ model: z.string().min(1) }),
-    json: { type: "object", properties: { model: str("Local path or Hub id, e.g. Qwen/Qwen3-30B-A3B") }, required: ["model"] },
+    json: { type: "object", properties: { model: str("Local path, Hub id (Qwen/Qwen3-30B-A3B) or the model's name as the user wrote it") }, required: ["model"] },
   }),
   spec({
     name: "model_summary",
