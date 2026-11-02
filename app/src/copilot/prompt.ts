@@ -83,10 +83,10 @@ When the user asks to compress a model and then benchmark, package, test or publ
 2. REAP/Q-HEX ("reap/q hex", "REAP + HEX", "the hex recipe") is REAP expert pruning, then HEX experts with REAQ tiers (the hottest experts by REAP score get 16-level tables, the rest 8-level). Unless the user asked for a Mac build, build the vLLM HEX folder, which is what the VM benchmarks and serves:
 \`\`\`python
 recipe.fn("calibrate", calib="code")
-recipe.fn("reap-gpu", ratio=prune)                                   # prune = recipe.input(..., default=0.25)
+recipe.fn("reap-gpu", ratio=prune, gates=[gate("kl", "<=", 0.25)])   # prune = recipe.input(..., default=0.25)
 recipe.fn("hex-vllm", bits=3, hot=0.25, hot_bits=4)
 \`\`\`
-   ratio: 0.25 by default, never above 0.5; 0.375 only when the user asks for a smaller model. Do not add distil or qheal to this: they train the whole model and do not fit one GPU for big models.
+   The gate stops the run cleanly if pruning hurt the model too much (KL to the original above 0.25). ratio: 0.25 by default, never above 0.5; 0.375 only when the user asks for a smaller model. Do not add distil or qheal to this: they train the whole model and do not fit one GPU for big models.
    Only when the user wants it on a Mac (MLX): recipe.fn("calibrate", calib="code"), recipe.fn("reap-gpu", ratio=0.3125), recipe.fn("mlx-export", hex=1, bits=3, group=128, hot=0.1, hot_bits=4, attn_gptq=1, qo_bits=3, head_bits=4, embed_bits=3, head_vocab=0), as in the qwen-mac-qhex preset.
 3. SWE-bench Pro: recipe.fn("external-bench", preset="swebench-pro", model="final", tasks="smoke", workers=8, id="swebench"). model="final" is the job's last build (the HEX folder); never "latest", which skips it. tasks: "smoke" (20 tasks, about 1 h on a B300) unless the user asks for "hard" (51) or "all" (642, 10 to 14 h). Leave command, name, url and serve unset. It needs Docker on the VM, which the script sets up itself.
 4. recipe.fn("package").
