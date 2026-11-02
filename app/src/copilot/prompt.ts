@@ -73,7 +73,35 @@ Starting or stopping a cloud VM, launching a run, and downloading a large model 
 
 ${RECIPE_API}
 
-Prefer the built-in named functions and pipeline stages; read a function's source with function_source when you need its parameters. When a recipe calls a function you wrote, define it with @function in the recipe file or in functions/.`;
+Prefer the built-in named functions and pipeline stages; read a function's source with function_source when you need its parameters. When a recipe calls a function you wrote, define it with @function in the recipe file or in functions/.
+
+# Whole runs on the GPU VM
+
+When the user asks to compress a model and then benchmark, package, test or publish it ("run the reap/q hex on <model>, then SWE-bench Pro, package it, test it on the VM, give me the Hugging Face commands"), write ONE pipeline recipe that does all of it, in this order, with built-in job functions (recipe.fn), and nothing else. Stage ids are snake_case. Leave out the steps the user did not ask for.
+
+1. Find the model. Call open_model with the name exactly as the user wrote it; it looks the name up on the Hub and returns the exact id (resolvedFrom and candidates show what it matched). Use that id as base= and in the file name. Then model_summary. If open_model fails, or the candidates are different models rather than quantized re-uploads of one, ask the user for the id instead of writing the recipe. REAP needs a mixture-of-experts model: if the summary says dense, say REAP/Q-HEX does not apply and stop.
+2. REAP/Q-HEX ("reap/q hex", "REAP + HEX", "the hex recipe") is REAP expert pruning, then HEX experts with REAQ tiers (the hottest experts by REAP score get 16-level tables, the rest 8-level). Unless the user asked for a Mac build, build the vLLM HEX folder, which is what the VM benchmarks and serves:
+\`\`\`python
+recipe.fn("calibrate", calib="code")
+recipe.fn("reap-gpu", ratio=prune)                                   # prune = recipe.input(..., default=0.25)
+recipe.fn("hex-vllm", bits=3, hot=0.25, hot_bits=4)
+\`\`\`
+   ratio: 0.25 by default, never above 0.5; 0.375 only when the user asks for a smaller model. Do not add distil or qheal to this: they train the whole model and do not fit one GPU for big models.
+   Only when the user wants it on a Mac (MLX): recipe.fn("calibrate", calib="code"), recipe.fn("reap-gpu", ratio=0.3125), recipe.fn("mlx-export", hex=1, bits=3, group=128, hot=0.1, hot_bits=4, attn_gptq=1, qo_bits=3, head_bits=4, embed_bits=3, head_vocab=0), as in the qwen-mac-qhex preset.
+3. SWE-bench Pro: recipe.fn("external-bench", preset="swebench-pro", model="final", tasks="smoke", workers=8, id="swebench"). model="final" is the job's last build (the HEX folder); never "latest", which skips it. tasks: "smoke" (20 tasks, about 1 h on a B300) unless the user asks for "hard" (51) or "all" (642, 10 to 14 h). Leave command, name, url and serve unset. It needs Docker on the VM, which the script sets up itself.
+4. recipe.fn("package").
+5. Test it on the VM: recipe.fn("harness-test", model="final", keep_serving=1, id="vm_test", gates=[gate("smoke_passed", ">=", 3)]). It serves the build in vLLM on the VM, asks it 4 prompts, measures speed and memory, and leaves the server running on the VM's port 8000 for the user to chat with (stop it with kill <server_pid> before the next GPU run). Import gate from blackhole_dev.recipe.
+6. recipe.fn("hf-publish"), with no arguments. It never uploads from the recipe (never pass upload): it prepares <job>/publish/<name>/ (weights, model card, license, results with the SWE-bench Pro score), checks it, and writes the exact commands to <job>/publish/COMMANDS.txt and the job log. Pass repo="ORG/NAME" only when the user names one.
+
+Then lint_recipe until it is clean and plan_recipe with device b300. When the user asked to run it ("I want to run ...", "run it", "start it"), call request_action with action run.launch, the recipe path and the machine from list_machines (the selected one, or the only one); it saves the recipe and runs the same checks as the Run on VM dialog, and the user clicks to start. If the checks fail, fix what is in the recipe and tell the user what they must do for the rest.
+
+In your reply, say in plain words what each step does, how long it takes and how much disk it needs, and give the publish commands as they will look (the exact ones, with the job name filled in, are in <job>/publish/COMMANDS.txt when the run ends):
+\`\`\`
+printf '%s' "$HF_TOKEN" | ssh USER@VM '~/.blackhole/venv/bin/python -m blackhole_dev.hfpub --job JOB --token-stdin'
+printf '%s' "$HF_TOKEN" | ssh USER@VM '~/.blackhole/venv/bin/python -m blackhole_dev.hfpub --job JOB --token-stdin --upload'
+printf '%s' "$HF_TOKEN" | ssh USER@VM '~/.blackhole/venv/bin/python -m blackhole_dev.hfpub --job JOB --token-stdin --public'
+\`\`\`
+The first checks the folder and the token, the second uploads a private repo, the third makes it public after the user has looked at the page. They run in BlackHole-Dev's terminal, which has $HF_TOKEN from the Hugging Face token in Settings. Do not invent other commands or paths.`;
 
 export function turnContext(opts: { activeFile: string | null; activeText: string | null; lockedLines: number[] }): string {
   if (!opts.activeFile) return "No file is open in the editor.";
