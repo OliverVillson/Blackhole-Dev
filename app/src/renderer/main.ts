@@ -13,7 +13,7 @@ import { settingsView } from "./views/settings";
 import { registerThemeCommands } from "./views/themes";
 import { PlanPanel, problemsPanel } from "./panels/plan";
 import { TerminalPanel, outputPanel } from "./panels/terminal";
-import { welcomeTab, overviewTab } from "./tabs";
+import { checksTab, overviewTab } from "./tabs";
 import { openPalette, openSearch } from "./palette";
 import { rendererModules } from "../modules.renderer";
 import { applyTheme, cachedThemeId, currentTheme } from "./theme";
@@ -51,7 +51,7 @@ async function boot(): Promise<void> {
   bh.on("helper:status", (s: HelperStatus) => s.state === "ready" && plan.loadDevices());
 
   // Tabs.
-  shell.registerTabType({ id: "welcome", title: () => "Welcome", key: () => "welcome", render: welcomeTab(shell) });
+  shell.registerTabType({ id: "checks", title: () => "Setup checks", key: () => "checks", render: checksTab(shell) });
   shell.registerTabType<{ path: string }>({ id: "recipe-overview", title: (s) => `${basename(s.path)} · overview`, key: (s) => s.path, render: overviewTab(shell) });
 
   // Commands (ids are what menus, keybindings and modules call).
@@ -147,7 +147,7 @@ async function boot(): Promise<void> {
   cmd("workbench.view", "Show a sidebar view", (activityId: string) => shell.showActivity(activityId));
   cmd("workbench.right", "Show a right-hand panel", (panelId: string) => shell.showRight(panelId));
   cmd("workspace.choose", "Choose workspace folder", () => bh.invoke("ws:chooseFolder"));
-  cmd("app.welcome", "Welcome and checks", () => shell.openTab("welcome", {}));
+  cmd("app.checks", "Setup checks", () => shell.openTab("checks", {}));
   cmd("app.logs", "Show logs", () => shell.showPanel("output"));
   cmd("recipes.overviewActive", "Overview of the active recipe", () => shell.executeCommand("recipe.overview"));
 
@@ -161,7 +161,6 @@ async function boot(): Promise<void> {
   });
 
   shell.showActivity("recipes");
-  shell.openTab("welcome", {});
 
   // Workstream modules (copilot, vm, chat, ...).
   for (const [id, load] of rendererModules) {

@@ -18,7 +18,7 @@ st = pytest.importorskip("safetensors.numpy")
 from blackhole_dev import hfpub  # noqa: E402
 
 
-def fake_mlx(d: Path, src_path: str = "/home/oliver-reaper/.blackhole/jobs/x/reaper/out/tiny-healed") -> Path:
+def fake_mlx(d: Path, src_path: str = "/home/user/.blackhole/jobs/x/reaper/out/tiny-healed") -> Path:
     d.mkdir(parents=True)
     a = {"language_model.model.layers.0.mlp.experts.weight": np.zeros((4, 8), np.uint8),
          "language_model.model.layers.0.mlp.experts.scales": np.ones((4, 1), np.float16)}
@@ -178,11 +178,11 @@ def test_token_from_stdin(monkeypatch):
 
 
 def test_commands_pipe_the_app_token_over_ssh(monkeypatch):
-    monkeypatch.setenv("SSH_CONNECTION", "1.2.3.4 5555 204.12.178.100 22")
+    monkeypatch.setenv("SSH_CONNECTION", "1.2.3.4 5555 203.0.113.11 22")
     info = {"folder": "/j/publish/x", "size_gb": 1.0, "files": ["a"], "kind": "mlx", "repo": "<your-hf-name>/x"}
     cmds = hfpub.commands("/home/u/.blackhole/venv/bin/python", "--job /j", info)
     text = "\n".join(cmds)
-    assert "printf '%s' \"$HF_TOKEN\" | ssh" in text and "@204.12.178.100" in text
+    assert "printf '%s' \"$HF_TOKEN\" | ssh" in text and "@203.0.113.11" in text
     assert "--token-stdin --upload" in text and "--repo" not in text
     assert "from huggingface_hub import login; login()" in text
 

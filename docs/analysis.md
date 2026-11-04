@@ -16,7 +16,7 @@ The **Analysis** activity (bar-chart icon) lists:
   its params, what it will read, **Run**, and the charts. Each chart has a **Table** view of
   its numbers; hovering reads values. **Source** opens the Python file; **Fork** copies a
   built-in into `~/BlackHole-Dev/analysis/`, where your copy replaces it.
-- **Your scripts**: **New script** writes a starter file there and opens it; **Run the open
+- **Your scripts**: **New script** creates an empty file there and opens it; **Run the open
   file** runs whatever analysis file is in the editor (unsaved text included).
 
 Palette commands: `Analysis: Open an analysis`, `Analysis: Compare the model with its

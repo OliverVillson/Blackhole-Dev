@@ -4,3 +4,8 @@ __pycache__/
 .pytest_cache/
 app/test/chat/preview/bundle.js
 build/
+.env
+.env.*
+*.pem
+*.key
+secrets.json

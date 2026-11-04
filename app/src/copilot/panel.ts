@@ -222,7 +222,6 @@ export function renderCopilotPanel(el: HTMLElement, deps: PanelDeps): () => void
   bar.append(dot, barMsg, pauseBtn, stopBtn);
 
   const log = h("div", { class: "cp-log", "aria-live": "polite" });
-  log.append(h("div", { class: "cp-think" }, "Ask for a recipe, e.g. “Make a recipe like qwen-mac-hex for Qwen3-30B-A3B: drop the weakest 25% of experts, keep the router frozen, int4 attention, bench on LCB.” You can type in the file while it writes; your lines are kept."));
 
   const ft = h("div", { class: "cp-ft" });
   const lab = h("label", { for: "cp-steer" }, "Ask the copilot");

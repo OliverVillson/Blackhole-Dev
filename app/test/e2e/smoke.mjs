@@ -1,7 +1,7 @@
 // Launch the built app with the fake helper, exercise the shell, save screenshots.
 // Run: npm run build && xvfb-run -a node test/e2e/smoke.mjs <outdir>
 import { _electron as electron } from "playwright";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, mkdirSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +9,9 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const out = process.argv[2] ?? join(here, "shots");
 const home = mkdtempSync(join(tmpdir(), "bhdev-home-"));
+// New workspaces start empty; seed one recipe for the test to open.
+mkdirSync(join(home, "BlackHole-Dev", "recipes"), { recursive: true });
+copyFileSync(join(here, "../fixtures/first-recipe.py"), join(home, "BlackHole-Dev", "recipes", "first-recipe.py"));
 const app = await electron.launch({
   executablePath: join(here, "../../node_modules/electron/dist/electron"),
   args: [join(here, "../.."), "--no-sandbox", `--user-data-dir=${join(home, "ud")}`],
@@ -24,7 +27,8 @@ win.on("console", (m) => m.type() === "error" && errors.push(m.text()));
 await win.setViewportSize({ width: 1440, height: 900 });
 await win.waitForSelector(".titlebar");
 await win.waitForFunction(() => document.body.innerText.includes("blackhole_dev 0.1.0-fake"), null, { timeout: 20000 });
-await win.screenshot({ path: join(out, "01-welcome.png") });
+await win.evaluate(() => window.__shell.executeCommand("app.checks"));
+await win.screenshot({ path: join(out, "01-checks.png") });
 await win.click("text=first-recipe.py");
 await win.waitForSelector(".monaco-editor .view-lines");
 // Palette is a single popover: the same shortcut again closes it, the other mode switches it.
@@ -59,17 +63,17 @@ await win.evaluate(async () => {
 await win.waitForSelector(".hunkbar:not(.hidden)");
 await win.screenshot({ path: join(out, "03-copilot-stream.png") });
 await win.evaluate(() => { const s = window.__shell; const f = s.activeFile(); for (const x of s.editor.streams.hunks(f)) s.editor.streams.acceptHunk(x.id); });
-// Split view: split right (a second view of the same file), drag the Welcome tab down into a
+// Split view: split right (a second view of the same file), drag the Setup checks tab down into a
 // third group, resize, cycle groups, then collapse everything back into one group.
 const groups = () => win.evaluate(() => document.querySelectorAll(".editor-area .group").length);
 await win.click(".editor-area .group .tab >> nth=1");
 await win.keyboard.press("Control+\\");
 await win.waitForFunction(() => document.querySelectorAll(".editor-area .group").length === 2);
 await win.waitForFunction(() => document.querySelectorAll(".editor-area .group:nth-child(3) .monaco-editor .view-lines").length > 0 || document.querySelectorAll(".monaco-editor").length >= 2);
-const welcome = win.locator(".group >> nth=0").locator(".tab", { hasText: "Welcome" });
+const checksTab = win.locator(".group >> nth=0").locator(".tab", { hasText: "Setup checks" });
 const target = win.locator(".group >> nth=1").locator(".editor-host");
 const box = await target.boundingBox();
-await welcome.dragTo(target, { targetPosition: { x: box.width / 2, y: box.height - 20 } });
+await checksTab.dragTo(target, { targetPosition: { x: box.width / 2, y: box.height - 20 } });
 await win.waitForFunction(() => document.querySelectorAll(".editor-area .group").length === 3, null, { timeout: 5000 });
 assert(await win.evaluate(() => !!document.querySelector(".split.split-col")), "dragging a tab to the bottom edge splits down");
 const sash = win.locator(".gsash.v").first();
@@ -91,7 +95,7 @@ const g0 = win.locator(".group >> nth=0").locator(".tab").first();
 const moving = win.locator(".group >> nth=2").locator(".tab").first();
 await moving.dragTo(g0, { targetPosition: { x: 4, y: 10 } });
 await win.waitForFunction(() => document.querySelectorAll(".editor-area .group").length === 2, null, { timeout: 5000 });
-assert(await win.evaluate(() => document.querySelector(".group .tab")?.textContent?.includes("Welcome")), "a tab dropped left of a tab is inserted before it");
+assert(await win.evaluate(() => document.querySelector(".group .tab")?.textContent?.includes("Setup checks")), "a tab dropped left of a tab is inserted before it");
 await win.evaluate(() => window.__shell.executeCommand("group.collapse"));
 assert((await groups()) === 1, "collapse folds the second group into the first");
 // Shift+Tab moves between tabs of the group.

@@ -117,30 +117,7 @@ export async function forkModel(deps: Deps, req: ForkRequest): Promise<{ ok: tru
   }
 }
 
-/** A new analysis script, ready to edit and run (Analysis: New script). */
-export function scriptTemplate(name: string): string {
-  return `"""${name}: describe what this analysis shows."""
-
-from blackhole_dev.analysis import analysis
-from blackhole_dev.analysis.lib import cost, sampled_stats
-
-
-def _cost(m, sample=128):
-    # bytes this will read, so the app can ask before a big read (leave cost=None if unsure:
-    # the app then holds the run to your read limit and asks only if it gets there)
-    return sum(cost(L.moe.experts if L.moe else [x for x in (L.mlp,) if x], sample) for L in m.layers)
-
-
-@analysis("${name}", title="${name}", needs="weights", cost=_cost)
-def run(r, m, sample: int = 128):
-    """RMS of each layer's feed-forward weights. r.line / r.bar / r.hist / r.heatmap /
-    r.scatter / r.table / r.tiles / r.text / r.figure(matplotlib) draw in the app."""
-    xs, ys = [], []
-    for L in m.layers:
-        r.progress(f"layer {L.index}", L.index / len(m.layers))
-        xs.append(L.index)
-        ys.append(sampled_stats(L.moe.experts if L.moe else [x for x in (L.mlp,) if x], sample)["rms"])
-    r.line("Feed-forward RMS by layer", xs, {"rms": ys}, xlabel="layer", ylabel="RMS")
-    r.tiles([("Layers", len(xs)), ("Largest RMS", max(ys))])
-`;
+/** A new analysis script starts empty: no sample code (Analysis: New script). */
+export function scriptTemplate(_name: string): string {
+  return "";
 }
