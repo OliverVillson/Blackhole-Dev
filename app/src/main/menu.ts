@@ -96,7 +96,7 @@ export function buildMenu(run: (command: string) => void): Menu {
       ],
     },
     { role: "windowMenu" },
-    { role: "help", submenu: [cmd("Welcome and Checks", "app.welcome"), cmd("Show Logs", "app.logs")] },
+    { role: "help", submenu: [cmd("Setup Checks", "app.checks"), cmd("Show Logs", "app.logs")] },
   ];
   return Menu.buildFromTemplate(template);
 }

@@ -1,11 +1,10 @@
 // The user's workspace folder: recipes/, functions/, models/. File access from the renderer is
 // confined to it.
 
-import { mkdirSync, existsSync, writeFileSync } from "node:fs";
+import { mkdirSync, existsSync } from "node:fs";
 import { readFile, writeFile, readdir, stat, rename, rm, mkdir } from "node:fs/promises";
 import { join, resolve, relative, isAbsolute, dirname, basename, sep } from "node:path";
 import type { AppPaths } from "../shared/ext";
-import { STARTER } from "../shared/starter";
 
 export function workspacePaths(root: string, userData: string): AppPaths {
   return {
@@ -18,9 +17,7 @@ export function workspacePaths(root: string, userData: string): AppPaths {
 }
 
 export function ensureWorkspace(p: AppPaths): void {
-  const fresh = !existsSync(p.recipes);
   for (const d of [p.workspace, p.recipes, p.functions, p.models]) mkdirSync(d, { recursive: true });
-  if (fresh) writeFileSync(join(p.recipes, "first-recipe.py"), STARTER.recipe("first-recipe"));
 }
 
 const clean = (s: string) => s.replace(/[^A-Za-z0-9._-]/g, "-");

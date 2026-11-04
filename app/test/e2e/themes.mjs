@@ -1,7 +1,7 @@
 // Screenshot the main screen in every theme (for reviewing themes, not run in CI).
 // Run: npm run build && xvfb-run -a node test/e2e/themes.mjs <outdir> [id,id,...]
 import { _electron as electron } from "playwright";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, mkdirSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const out = process.argv[2] ?? join(here, "themes");
 const only = process.argv[3]?.split(",");
 const home = mkdtempSync(join(tmpdir(), "bhdev-home-"));
+// New workspaces start empty; seed one recipe for the test to open.
+mkdirSync(join(home, "BlackHole-Dev", "recipes"), { recursive: true });
+copyFileSync(join(here, "../fixtures/first-recipe.py"), join(home, "BlackHole-Dev", "recipes", "first-recipe.py"));
 const app = await electron.launch({
   executablePath: join(here, "../../node_modules/electron/dist/electron"),
   args: [join(here, "../.."), "--no-sandbox", `--user-data-dir=${join(home, "ud")}`],

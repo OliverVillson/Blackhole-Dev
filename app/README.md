@@ -76,7 +76,7 @@ entry that `npm install-scripts approve` writes into `package.json`), then `npm 
 takes a few seconds. If it fails, the app still runs and the terminal falls back to plain pipes.
 
 On first start the app creates `~/BlackHole-Dev/` with `recipes/`, `functions/` and `models/`
-and a starter recipe. Then:
+(all empty). Then:
 
 - **Settings (gear, bottom left) > Python helper**: paste the full path of the venv's Python,
   `/Users/<you>/bhdev-venv/bin/python`, and press *Save and restart*. The status bar shows

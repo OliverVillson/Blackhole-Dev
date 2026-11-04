@@ -38,7 +38,7 @@ describe("Run on VM dialog", () => {
   });
   it("shows only the check of the machine picked now, even when an older check answers last", async () => {
     const orb = { ...host, id: "ssh:orb", label: "orb", target: "orb" };
-    const reaper = { ...host, id: "ssh:reaper", label: "oliver-reaper", target: "oliver-reaper@204.12.178.65" };
+    const reaper = { ...host, id: "ssh:reaper", label: "gpu-box", target: "user@203.0.113.10" };
     let slow!: (p: LaunchPlan) => void;
     const prepare = vi.fn((_r: string, id: string) => id === "ssh:orb"
       ? new Promise<LaunchPlan>((r) => (slow = r))
@@ -48,18 +48,18 @@ describe("Run on VM dialog", () => {
     render(<RunOnVm api={api} recipe="/w/r.py" close={() => {}} onLaunched={() => {}} />);
     await act(async () => {});
     expect(prepare).toHaveBeenLastCalledWith("/w/r.py", "ssh:orb");
-    await act(async () => fireEvent.click(screen.getByText("oliver-reaper")));
+    await act(async () => fireEvent.click(screen.getByText("gpu-box")));
     await screen.findByText(`ssh ${reaper.target} mkdir`, { exact: false });
     await act(async () => slow({ ...plan, id: "p-orb", host: orb, checks: [{ id: "ssh", label: "SSH", tone: "bad", detail: "probe failed on orb" }], steps: [{ title: "x", cmd: "ssh orb mkdir" }] }));
     expect(screen.queryByText("probe failed on orb")).toBeNull();
     expect(screen.queryByText("ssh orb mkdir", { exact: false })).toBeNull();
-    await act(async () => fireEvent.click(screen.getByText("Run on oliver-reaper ▸")));
+    await act(async () => fireEvent.click(screen.getByText("Run on gpu-box ▸")));
     expect(api.launch).toHaveBeenCalledWith("p-reaper", { pullWhenDone: true, notify: true });
   });
   it("starts on the machine picked last time", async () => {
     localStorage.setItem("bhvm.lastHost", "ssh:reaper");
     const orb = { ...host, id: "ssh:orb", label: "orb", target: "orb" };
-    const reaper = { ...host, id: "ssh:reaper", label: "oliver-reaper", target: "oliver-reaper@204.12.178.65" };
+    const reaper = { ...host, id: "ssh:reaper", label: "gpu-box", target: "user@203.0.113.10" };
     const api = fakeApi({ hosts: vi.fn(async () => [orb, reaper]) });
     render(<RunOnVm api={api} recipe="/w/r.py" close={() => {}} onLaunched={() => {}} />);
     await act(async () => {});
@@ -109,17 +109,17 @@ describe("deleting and forgetting machines", () => {
     const hosts: Host[] = [host];
     const api = fakeApi({
       hosts: vi.fn(async () => hosts),
-      forgetHost: vi.fn(async () => (hosts.length = 0, { label: "oliver-b300", message: "forgot oliver-b300", consoles: [{ provider: "nebius", url: "https://console.nebius.com" }] })),
+      forgetHost: vi.fn(async () => (hosts.length = 0, { label: "my-b300", message: "forgot my-b300", consoles: [{ provider: "nebius", url: "https://console.nebius.com" }] })),
     });
-    const own = { ...host, id: "app:oliver-reaper@204.12.178.65", label: "oliver-b300", source: "app" as const };
+    const own = { ...host, id: "app:user@203.0.113.10", label: "my-b300", source: "app" as const };
     hosts[0] = own;
     render(<RunOnVm api={api} recipe="/w/r.py" close={() => {}} onLaunched={() => {}} />);
-    const x = await screen.findByRole("button", { name: "Forget oliver-b300" });
+    const x = await screen.findByRole("button", { name: "Forget my-b300" });
     await act(async () => fireEvent.click(x));
     expect(screen.getByRole("alertdialog").textContent).toMatch(/keeps running and billing/);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Forget" })));
-    expect(api.forgetHost).toHaveBeenCalledWith("app:oliver-reaper@204.12.178.65");
-    expect(screen.getByRole("status").textContent).toMatch(/Forgot oliver-b300\..*still running and billing/);
+    expect(api.forgetHost).toHaveBeenCalledWith("app:user@203.0.113.10");
+    expect(screen.getByRole("status").textContent).toMatch(/Forgot my-b300\..*still running and billing/);
     expect((screen.getByRole("link", { name: "nebius" }) as HTMLAnchorElement).href).toBe("https://console.nebius.com/");
   });
 });

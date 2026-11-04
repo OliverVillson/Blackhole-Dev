@@ -1,26 +1,16 @@
-// Full-tab pages the shell owns: Welcome (checks, quick start) and Recipe overview.
+// Full-tab pages the shell owns: Setup checks and Recipe overview.
 
 import { h, clear, basename } from "./dom";
 import { helper } from "./bridge";
 import { renderChecks } from "./views/settings";
 import { stepChain } from "./panels/plan";
-import { holeCanvas } from "../shared/hole";
 import type { Shell } from "./shell";
 
-export function welcomeTab(shell: Shell): (el: HTMLElement) => void {
+export function checksTab(shell: Shell): (el: HTMLElement) => void {
   return (el) => {
     const checks = h("div", { style: "display:flex;flex-direction:column;gap:6px" });
     el.append(h("div", { class: "page" },
-      h("div", { class: "row", style: "gap:28px;align-items:center;flex-wrap:nowrap" },
-        h("div", { class: "logo-hole", "aria-hidden": "true" }, holeCanvas(48, 4)),
-        h("div", null, h("div", { class: "hd" }, "BlackHole-Harness"), h("h1", null, "BlackHole-Dev"),
-          h("div", { class: "meta", style: "font-size:14px" }, "Write recipes in Python. Plan them on headers alone. Run them on your own VM."))),
-      h("div", { class: "row" },
-        h("button", { class: "btn pri", onclick: () => shell.executeCommand("recipe.new") }, "New recipe"),
-        h("button", { class: "btn", onclick: () => shell.executeCommand("recipe.importToml") }, "Import TOML schema"),
-        h("button", { class: "btn", onclick: () => shell.executeCommand("recipe.fromPreset") }, "Start from a preset"),
-        h("button", { class: "btn", onclick: () => shell.showActivity("functions") }, "Browse built-in functions")),
-      h("div", null, h("div", { class: "hd", style: "margin-bottom:10px" }, "Checks"), checks),
+      h("div", null, h("div", { class: "hd", style: "margin-bottom:10px" }, "Setup checks"), checks),
       h("div", { class: "meta" }, `Workspace: ${shell.paths.workspace}`)));
     renderChecks(checks);
   };

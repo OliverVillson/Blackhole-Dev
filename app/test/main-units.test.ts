@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Secrets, type Cipher } from "../src/main/secrets";
@@ -40,12 +40,14 @@ describe("module host", () => {
 });
 
 describe("workspace", () => {
-  it("creates the layout with a starter recipe and refuses paths outside it", async () => {
+  it("creates an empty layout (no sample recipe) and refuses paths outside it", async () => {
     const root = mkdtempSync(join(tmpdir(), "ws-"));
     const p = workspacePaths(join(root, "w"), root);
     ensureWorkspace(p);
-    expect(existsSync(join(p.recipes, "first-recipe.py"))).toBe(true);
+    expect(readdirSync(p.recipes)).toEqual([]);
+    expect(readdirSync(p.functions)).toEqual([]);
     const ws = new Workspace(p);
+    await ws.create(p.recipes, "first-recipe.py", "x");
     const made = await ws.create(p.recipes, "a b.py", "x");
     expect(made.endsWith("a-b.py")).toBe(true);
     const again = await ws.create(p.recipes, "a b.py", "y");
@@ -60,6 +62,7 @@ describe("workspace", () => {
     const p = workspacePaths(join(root, "w"), root);
     ensureWorkspace(p);
     const ws = new Workspace(p);
+    await ws.create(p.recipes, "first-recipe.py", "x");
     const qwen = await ws.mkdir(p.recipes, "qwen");
     await expect(ws.mkdir(p.recipes, "qwen")).rejects.toThrow(/exists/);
     const nested = await ws.create(p.recipes, "mac/int 4.py", "x");

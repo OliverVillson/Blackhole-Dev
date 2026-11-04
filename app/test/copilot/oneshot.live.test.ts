@@ -134,7 +134,7 @@ describe.skipIf(!live)("copilot one-shot (live)", () => {
       invoke: async (channel, payload) => {
         invokes.push([channel, payload]);
         if (channel === "vm:hosts.list")
-          return { hosts: [{ id: "b300", label: "oliver-reaper@204.12.178.100", kind: "ssh", gpu: "1x B300 288GB", status: "running", selected: true }] };
+          return { hosts: [{ id: "b300", label: "user@203.0.113.11", kind: "ssh", gpu: "1x B300 288GB", status: "running", selected: true }] };
         if (channel === "analysis:models") return { models: [] };
         if (channel === "vm:job.list") return { jobs: [] };
         return { approved: false };

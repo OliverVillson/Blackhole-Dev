@@ -384,7 +384,7 @@ def ssh_target() -> str:
 
 
 def commands(python: str, target: str, info: dict, private: bool = True) -> list[str]:
-    """What Oliver runs: from the Mac app terminal over ssh with $HF_TOKEN, or on the VM after a login."""
+    """What you run: from the Mac app terminal over ssh with $HF_TOKEN, or on the VM after a login."""
     host = ssh_target()
     base = f"{shlex.quote(python)} -m blackhole_dev.hfpub {target}"
     remote = lambda extra: f"printf '%s' \"$HF_TOKEN\" | ssh {host} {shlex.quote(base + ' --token-stdin' + extra)}"  # noqa: E731

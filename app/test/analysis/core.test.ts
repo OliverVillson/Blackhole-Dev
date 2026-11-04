@@ -118,9 +118,7 @@ describe("formatting and the template", () => {
     expect(fmtBytes(9.8e9)).toBe("9.80 GB");
   });
 
-  it("writes a runnable @analysis script", () => {
-    const t = scriptTemplate("kurt");
-    expect(t).toContain('@analysis("kurt"');
-    expect(t).toContain("def run(r, m, sample: int = 128)");
+  it("starts a new analysis script empty", () => {
+    expect(scriptTemplate("kurt")).toBe("");
   });
 });
