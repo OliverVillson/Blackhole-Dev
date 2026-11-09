@@ -41,6 +41,8 @@ recipe.eval(gates=[gate("hex.hex-quantize.rel_mse", "<=", 0.2)])
 - References print as \${...}: recipe.inputs.x, step.<artifact>, step.metrics.<m>, recipe.base.model, recipe.hw.<field>.
 - \`@function("name", per="tensor"|"part"|"model"|"job")\` functions (\`from blackhole_dev import function\`) may live in the recipe file or in functions/*.py; a user function with a built-in's name overrides it. Job functions (distil, qheal, bench, ...) run as their own pipeline stage via recipe.fn(...).
 - A recipe is either "pipeline" (pipeline.* and job functions) or "core" (catalog ops such as model.edit). Do not mix the two in one recipe.
+- Step ids in a pipeline recipe: never give a job-function step the id of a pipeline stage (detect, plan, weights, calibrate, score, prune, eval, heal, gptq, reaq, mlx, hexvllm, qheal, bench, quant, package) unless the step calls the function of that same name: recipe.fn("calibrate") and recipe.fn("package") are fine and run in that stage's place, but recipe.fn("kl-eval", id="package") is refused when the run starts. Leave id unset or pick a name of your own (id="kl_check"), and never use one id twice.
+- The smoe-* functions (dense-to-SMoE) convert dense Qwen3 and Qwen2/2.5 models only. For any other family (Granite, Llama, Mistral, Gemma, ...) say so and stop, or offer to fork them; do not write the recipe as if they work.
 `.trim();
 
 export const SYSTEM_PROMPT = `You are the recipe copilot inside BlackHole-Dev, a desktop editor for model-compression recipes (expert pruning, quantization, distillation and healing of open-weight models so they run on smaller machines). The developer asks for a recipe; you write it into their editor while they watch, and they may type into the file while you write.

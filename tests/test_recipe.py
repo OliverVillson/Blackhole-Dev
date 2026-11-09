@@ -428,3 +428,98 @@ def test_open_model_looks_up_a_typed_name_on_the_hub(monkeypatch):
     # an exact id is opened as given, without a search
     h.anatomy_open({"model": "Qwen/Qwen3-30B-A3B"})
     assert opened[-1] == "Qwen/Qwen3-30B-A3B"
+
+
+# --------------------------------------------------------------------------- step ids vs pipeline stages
+
+def _lint_text(text):
+    from blackhole_dev.recipe.lint import lint
+    return lint(text=text)[1]
+
+
+_HEAD = 'from blackhole_dev.recipe import Recipe\nrecipe = Recipe("t/ids", "0.1.0", base="Qwen/Qwen3-0.6B")\n'
+
+
+def test_step_id_naming_another_stage_is_refused():
+    probs = _lint_text(_HEAD + 'recipe.fn("kl-eval", id="calibrate")\nrecipe.fn("kl-eval", id="package")\n')
+    ids = [p for p in probs if p["code"] == "step.id"]
+    assert [p["line"] for p in ids] == [3, 4]
+    assert all(p["severity"] == "error" for p in ids)
+    assert "'calibrate' is a pipeline stage" in ids[0]["message"]
+
+
+def test_job_fn_named_after_its_stage_is_fine():
+    probs = _lint_text(_HEAD + 'recipe.fn("calibrate", calib="code")\nrecipe.fn("package")\n')
+    assert not [p for p in probs if p["code"] == "step.id"]
+
+
+def test_pipeline_stage_then_job_with_its_id_is_used_twice():
+    from blackhole_dev.recipe.core import Recipe
+    from blackhole_dev.recipe.lint import check_ids
+    r = Recipe("t/ids", "0.1.0")
+    r.step("pipeline.package")
+    st = r.step("job.fn", fn="kl-eval", id="eval_kl")
+    st.id = "package"                      # what an id collision past Recipe.step looks like
+    assert [p["code"] for p in check_ids(r)] == ["step.id"]
+    assert "used twice" in check_ids(r)[0]["message"]
+
+
+def test_bundle_refuses_a_stage_id(tmp_path):
+    from blackhole_dev.recipe.bundle import bundle
+    from blackhole_dev.recipe.core import RecipeError
+    f = tmp_path / "r.py"
+    f.write_text(_HEAD + 'recipe.fn("kl-eval", id="package")\n')
+    with pytest.raises(RecipeError) as e:
+        bundle(f, out=tmp_path / "r.bhr", with_plan=False)
+    assert any(p["code"] == "step.id" for p in e.value.problems)
+    assert not (tmp_path / "r.bhr").exists()
+
+
+def test_stage_list_mirrors_the_pipeline():
+    from blackhole_dev.recipe import pipeline as pl
+    try:
+        from blackhole_pipeline import STAGES
+    except ImportError:
+        pytest.skip("pipeline not installed")
+    assert list(pl.STAGES) == list(STAGES)
+
+
+def test_lint_agrees_with_the_pipeline_on_ids():
+    try:
+        from blackhole_pipeline.recipe import problems
+    except ImportError:
+        pytest.skip("pipeline not installed")
+    from blackhole_dev.recipe.loader import load
+    from blackhole_dev.recipe.lint import check_ids
+    for body, bad in (('recipe.fn("kl-eval", id="package")\n', True), ('recipe.fn("calibrate")\n', False),
+                      ('recipe.fn("kl-eval", id="kl_check")\n', False)):
+        r = load(text=_HEAD + body)
+        pipe = [m for m in problems(r.to_raw()) if " id " in m]
+        assert bool(check_ids(r)) == bad
+        if "taken by a pipeline stage" not in " ".join(pipe):   # an older pipeline refuses calibrate too
+            assert bool(pipe) == bad
+
+
+def test_plan_flags_smoe_on_another_family():
+    from blackhole_dev.recipe.plan import SMOE_FAMILIES, _family_problems
+    from blackhole_dev.recipe.core import Recipe
+    import importlib.util, pathlib
+    import blackhole_dev
+    src = pathlib.Path(blackhole_dev.__file__).parent / "functions_src" / "_smoe.py"
+    spec = importlib.util.spec_from_file_location("_smoe_t", src)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert set(SMOE_FAMILIES) == set(mod.FAMILIES)
+
+    class M:
+        id = "ibm-granite/granite-3.3-8b-instruct"
+        config = {"model_type": "granite"}
+        class info:
+            model_type = "granite"
+
+    r = Recipe("t/smoe", "0.1.0")
+    r.fn("smoe-profile", id="profile")
+    probs = _family_problems(r, M)
+    assert [p["code"] for p in probs] == ["plan.family"] and "granite" in probs[0]["message"]
+    M.config, M.info.model_type = {"model_type": "qwen3"}, "qwen3"
+    assert _family_problems(r, M) == []

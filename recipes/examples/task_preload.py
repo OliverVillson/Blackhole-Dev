@@ -54,4 +54,4 @@ recipe.fn("task-trace", id="trace")
 recipe.fn("task-predictor", block_size=block_size, budget=budget, id="predictor")
 recipe.fn("task-preload", budget=budget, hot_format=hot_format, cold_format=cold_format, allocate=allocate,
           block_size=block_size, id="preload")
-recipe.fn("task-eval", id="eval", gates=[gate("task_gain_vs_random", ">=", 1.0)])
+recipe.fn("task-eval", id="task_eval", gates=[gate("task_gain_vs_random", ">=", 1.0)])

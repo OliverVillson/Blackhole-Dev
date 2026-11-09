@@ -148,7 +148,7 @@ def test_the_recipe_runs_as_job_functions(tmp_path):
            "REAPER_HOME": str(tmp_path / "home"), "BLACKHOLE_DEV_FUNCTIONS": str(tmp_path / "no-user-functions"),
            "CUDA_VISIBLE_DEVICES": ""}
     out = {}
-    for sid in ("prompts", "trace", "predictor", "preload", "eval"):
+    for sid in ("prompts", "trace", "predictor", "preload", "task_eval"):
         p = subprocess.run([sys.executable, "-m", "blackhole_dev.jobctx", "--job", str(job), "--stage", sid],
                            env=env, cwd=tmp_path, capture_output=True, text=True, timeout=900)
         assert p.returncode == 0, (sid, p.stdout[-3000:] + p.stderr[-3000:])
@@ -162,7 +162,7 @@ def test_the_recipe_runs_as_job_functions(tmp_path):
     assert moe_dir.parent == job / "reaper" / "out"
     pm = json.loads((moe_dir / "blackhole-preload.json").read_text())
     assert pm["layers"][0]["ffn_hot_rows"] == [0, 128] and pm["cold_format"] == "int2"
-    ev = out["eval"]
+    ev = out["task_eval"]
     for v in ("plan", "general", "random", "cold", "dynamic", "oracle"):
         assert ev[f"heldout_{v}_kl"] >= 0 and 0 <= ev[f"heldout_{v}_top1"] <= 1
     assert ev["heldout_cold_kl"] > ev["heldout_plan_kl"]

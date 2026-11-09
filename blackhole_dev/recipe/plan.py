@@ -228,6 +228,11 @@ def plan(r: Recipe, device: str | None = "mac16", model: str | None = None, inpu
     else:
         problems.append({"severity": "warning", "message": "no base model: set base= on the Recipe or pick a model",
                          "line": r.line, "code": "plan.no-model"})
+    if r.runner in ("pipeline", "mixed"):
+        from blackhole_dev.recipe.lint import check_ids
+        problems += check_ids(r)          # the PLAN panel shows the run-time refusals too
+    if m is not None:
+        problems += _family_problems(r, m)
     before = m.plan(context=context) if m is not None else None
     steps, notes = [], []
     for st in r.steps:
@@ -267,6 +272,25 @@ def plan(r: Recipe, device: str | None = "mac16", model: str | None = None, inpu
             "estHours": hours, "problems": problems, "steps": steps, "needs": needs,
             "device": device, "model": model, "gated": gated,
             "baseGb": round(before.total_gb, 6) if before else None}
+
+
+# model families each family-bound built-in converts (mirror of functions_src/_smoe.py FAMILIES)
+SMOE_FAMILIES = ("qwen3", "qwen2")
+
+
+def _family_problems(r: Recipe, m) -> list[dict]:
+    """Built-ins that only handle some model families, used on another one: say so before the
+    run fails on the VM."""
+    types = {str(m.config.get("model_type") or ""), str(getattr(m.info, "model_type", "") or "")} - {""}
+    out = []
+    for st in r.steps:
+        smoe = [n for n in st.functions() if n.startswith("smoe-")]
+        if smoe and types and not types & set(SMOE_FAMILIES):
+            out.append({"severity": "error", "line": st.line, "code": "plan.family",
+                        "message": f"{smoe[0]} converts dense {' and '.join(SMOE_FAMILIES)} models only; "
+                                   f"{m.id} is {'/'.join(sorted(types))}: pick a Qwen3 or Qwen2/2.5 dense base "
+                                   f"or fork {smoe[0]} for this family"})
+    return out
 
 
 def _open_problem(model: str, e: Exception) -> str:

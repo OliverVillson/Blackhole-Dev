@@ -42,6 +42,12 @@ Rules
 - A file defines exactly one `Recipe` at module level (call it `recipe` by convention; otherwise the only Recipe instance found).
 - `recipe.step(kind, id=None, needs=None, gates=None, when=True, always=False, **params)` returns a `Step`.
   `kind` is any op in the catalog (`ns.op` or `ns.op@2`) or a `pipeline.<stage>`.
+- Step ids in a pipeline recipe: a job-function step may not take the id of a pipeline stage
+  (`blackhole_pipeline.STAGES`: detect, plan, weights, calibrate, score, prune, eval, heal, gptq, reaq, mlx,
+  hexvllm, qheal, bench, quant, package) unless it calls the function of that name (`recipe.fn("calibrate")`
+  runs in the calibrate stage's place), and no id may repeat. Lint, the Plan view and `bundle()` refuse these
+  (code `step.id`), as the pipeline does at run time. The Plan view also flags `smoe-*` steps on a base model
+  that is not dense Qwen3 or Qwen2/2.5 (code `plan.family`).
 - References are objects that print as `${...}`: `recipe.inputs.prune`, `step.<artifact>`, `step.metrics.<m>`,
   `recipe.base.model`, `recipe.base.<fact>`, `recipe.hw.<field>`. Use them as values or inside f-strings.
 - `@function("name")` definitions may live in the recipe file itself or in `<workspace>/functions/*.py`; a
