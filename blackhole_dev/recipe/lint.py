@@ -81,6 +81,7 @@ def lint_recipe(r: Recipe, publish: bool = False) -> list[dict]:
         first = next(s for s in r.steps if s.family == "op")
         out.append(_p("this recipe mixes pipeline.* / job functions with catalog ops; no runner takes both yet "
                       "(split it into two recipes)", first.line, code="recipe.mixed"))
+    out += check_ids(r)
     pnames = pl.param_names()
     seen_pipe: list[str] = []
     for st in r.steps:
@@ -126,6 +127,32 @@ def lint_recipe(r: Recipe, publish: bool = False) -> list[dict]:
         from blackhole.core.lint import lint as public_lint
         for msg in public_lint(raw, publish=publish):
             out.append(_p(msg, _line_of(r, msg), "warning", "lint"))
+    return out
+
+
+def check_ids(r: Recipe) -> list[dict]:
+    """Step ids the pipeline refuses at run time (blackhole_pipeline.recipe.problems, mirrored so
+    a helper with an older pipeline installed still says it): a job step whose id names a
+    pipeline stage (pl.STAGES) but calls another function, and an id used twice. A job step
+    named after the stage it wraps, recipe.fn("calibrate") or recipe.fn("package"), is fine:
+    it runs in that stage's place with its own knobs."""
+    out: list[dict] = []
+    seen: set[str] = set()
+    for st in r.steps:
+        if st.family == "pipeline":
+            seen.add(st.op.split(".", 1)[1])
+            continue
+        if st.family != "job":
+            continue
+        sid = st.id if st.explicit_id else "job"
+        if sid in seen:
+            out.append(_p(f"step id {sid!r} is used twice; the pipeline runs each stage once, so give this "
+                          "step another id", st.line, code="step.id"))
+        elif sid in pl.STAGES and st.fn != sid:
+            out.append(_p(f"step id {sid!r} is a pipeline stage and this step calls {st.fn!r}; the pipeline "
+                          f"refuses it, so give the step another id (e.g. id={(st.fn or 'step').replace('-', '_')!r})",
+                          st.line, code="step.id"))
+        seen.add(sid)
     return out
 
 

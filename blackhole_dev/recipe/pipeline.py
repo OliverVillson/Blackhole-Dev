@@ -19,6 +19,11 @@ try:
 except ImportError:  # the pipeline package is not installed here: pipeline params go unchecked
     DEFAULTS = None
 try:
+    from blackhole_pipeline import STAGES
+except ImportError:  # mirror of blackhole_pipeline.STAGES (harness/blackhole_pipeline/__init__.py)
+    STAGES = ["detect", "plan", "weights", "calibrate", "score", "prune", "eval", "heal", "gptq", "reaq", "mlx",
+              "hexvllm", "qheal", "bench", "quant", "package"]
+try:
     from blackhole_pipeline.recipe import ALWAYS_FIRST, FORMAT, PIPELINE_STEPS, stage_list, write_bundle
     HAVE_PIPELINE = True
 except ImportError:  # a pipeline without --recipe support (or none)
